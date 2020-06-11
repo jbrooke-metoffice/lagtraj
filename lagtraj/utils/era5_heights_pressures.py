@@ -463,13 +463,18 @@ def era5_subset_by_time(mf_list, this_time, dictionary):
     Note: data order is North to South"""
     mf_extract=[]
     for mf_list_element in mf_list:
+        if "level" in mf_list_element.coords:
+             try:
+                 mf_list_element = mf_list_element.drop_vars(["z", "lnsp"])
+             except:
+                 pass
         mf_extract.append(mf_list_element.sel(
             time=[this_time],
             latitude=slice(dictionary["lat_max"], dictionary["lat_min"]),
             longitude=slice(
                 longitude_set_meridian(dictionary["lon_min"]),
                 longitude_set_meridian(dictionary["lon_max"]),
-            ),
+            )
         ))
     ds_subset=xr.merge(mf_extract)
     return ds_subset
@@ -480,8 +485,13 @@ def era5_interp_column_by_time(mf_list, this_time, lat_to_interp, lon_to_interp)
     with latitude and longitude dimensions retained"""
     mf_extract=[]
     for mf_list_element in mf_list:
+        if "level" in mf_list_element.coords:
+             try:
+                 mf_list_element = mf_list_element.drop_vars(["z", "lnsp"])
+             except:
+                 pass
         mf_extract.append(mf_list_element.interp(time=[this_time],
-        latitude=[lat_to_interp], longitude=[longitude_set_meridian(lon_to_interp)],
+        latitude=[lat_to_interp], longitude=[longitude_set_meridian(lon_to_interp)]
     ))
     ds_at_location=xr.merge(mf_extract)
     return ds_at_location
@@ -1248,8 +1258,6 @@ def main():
     files_model_fc = "output_domains/model_fc_*_eurec4a_circle_eul_domain.nc"
     files_single_fc = "output_domains/single_fc_*_eurec4a_circle_eul_domain.nc"
     ds_model_an = xr.open_mfdataset(files_model_an, combine="by_coords")
-    # z needs to be dropped to prevent duplicity, lnsp is simply redundant
-    ds_model_an = ds_model_an.drop_vars(["z", "lnsp"])
     ds_single_an = xr.open_mfdataset(files_single_an, combine="by_coords")
     ds_model_fc = xr.open_mfdataset(files_model_fc, combine="by_coords")
     ds_single_fc = xr.open_mfdataset(files_single_fc, combine="by_coords")

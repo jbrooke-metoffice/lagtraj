@@ -36,7 +36,6 @@ import datetime
 import numpy as np
 import pandas as pd
 import xarray as xr
-import isodate
 
 # Optional numba dependency
 try:
@@ -981,7 +980,7 @@ def prescribed_velocity_trajectory(ds_traj, trajectory_dict):
 
 def trajectory_at_origin(mf_list, ds_traj, trajectory_dict):
     """Adds data for an origin point that is directly in the time series"""
-    time_origin = isodate.parse_datetime(trajectory_dict["datetime_origin"])
+    time_origin = np.datetime64(trajectory_dict["datetime_origin"])
     lat_origin = trajectory_dict["lat_origin"]
     lon_origin = longitude_set_meridian(trajectory_dict["lon_origin"])
     ds_local = era5_interp_column_by_time(mf_list, time_origin, lat_origin, lon_origin)

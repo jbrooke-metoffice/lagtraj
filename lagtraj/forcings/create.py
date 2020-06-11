@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from pkg_resources import resource_filename
 from lagtraj.utils.levels import make_levels
+
 # from lagtraj.utils.era5 import add_heights_and_pressures
 from lagtraj.utils.hightune import hightune_variables
 from lagtraj.utils.parsers import (
@@ -19,10 +20,11 @@ from lagtraj.utils.parsers import (
 Todo
 - Implement the routines in the ERA5 time stepping"""
 
-levelsfile = resource_filename('lagtraj', 'utils/137levels.dat')
-df = pd.read_table(levelsfile, sep="\s+") 
-levA=df['a[Pa]'].values
-levB=df['b'].values
+levelsfile = resource_filename("lagtraj", "utils/137levels.dat")
+df = pd.read_table(levelsfile, sep="\s+")
+levA = df["a[Pa]"].values
+levB = df["b"].values
+
 
 def main():
     import argparse

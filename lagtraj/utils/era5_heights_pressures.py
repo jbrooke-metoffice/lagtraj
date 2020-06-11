@@ -486,6 +486,7 @@ def era5_interp_column_by_time(
     """Returns the dataset interpolated to given latitude and longitude
     with latitude and longitude dimensions retained"""
     mf_extract = []
+    ii=0
     for mf_list_element in mf_list:
         if "level" in mf_list_element.coords:
             if "z" in mf_list_element.variables:
@@ -494,12 +495,14 @@ def era5_interp_column_by_time(
         if len(vars_in_ds) > 0:
             mf_list_selection = mf_list_element[vars_in_ds]
             mf_time = mf_list_selection.sel(time=[this_time])
-            mf_extract.append(
-                mf_time.interp(
+            mf_to_file=mf_time.interp(
                     latitude=[lat_to_interp],
                     longitude=[longitude_set_meridian(lon_to_interp)],
                 )
-            )
+            mf_to_file.to_netcdf('tempfile'+str(ii)+'.nc')
+            mf_from_file=xr.open_dataset('tempfile'+str(ii)+'.nc')
+            ii=ii+1
+            mf_extract.append(mf_from_file)
     ds_at_location = xr.merge(mf_extract)
     return ds_at_location
 
@@ -510,6 +513,7 @@ def era5_interp_column_interp_time(
     """Returns the dataset interpolated to given latitude and longitude
     with latitude and longitude dimensions retained"""
     mf_extract = []
+    ii=0
     for mf_list_element in mf_list:
         if "level" in mf_list_element.coords:
             if "z" in mf_list_element.variables:
@@ -517,13 +521,15 @@ def era5_interp_column_interp_time(
         vars_in_ds = list(set(vars_for_traj) & set(mf_list_element.variables))
         if len(vars_in_ds) > 0:
             mf_list_selection = mf_list_element[vars_in_ds]
-            mf_extract.append(
-                mf_list_selection.interp(
+            mf_to_file=mf_list_selection.interp(
                     time=[this_time],
                     latitude=[lat_to_interp],
                     longitude=[longitude_set_meridian(lon_to_interp)],
                 )
-            )
+            mf_to_file.to_netcdf('tempfile'+str(ii)+'.nc')
+            mf_from_file=xr.open_dataset('tempfile'+str(ii)+'.nc')
+            ii=ii+1
+            mf_extract.append(mf_from_file)
     ds_at_location = xr.merge(mf_extract)
     return ds_at_location
 

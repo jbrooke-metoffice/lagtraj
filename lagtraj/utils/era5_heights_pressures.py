@@ -503,8 +503,9 @@ def era5_interp_column_by_time(
                     longitude_set_meridian(lon_to_interp + samp_margin)
                 ),
             )
-            mf_time.to_netcdf("timefile" + str(ii) + ".nc")
-            mf_time = xr.open_dataset("timefile" + str(ii) + ".nc")
+            mf_time.load()
+            #~ mf_time.to_netcdf("timefile" + str(ii) + ".nc")
+            #~ mf_time = xr.open_dataset("timefile" + str(ii) + ".nc")
             mf_interp = mf_time.interp(
                 latitude=[lat_to_interp],
                 longitude=[longitude_set_meridian(lon_to_interp)],
@@ -536,9 +537,10 @@ def era5_interp_column_interp_time(
                     longitude_set_meridian(lon_to_interp - samp_margin),
                     longitude_set_meridian(lon_to_interp + samp_margin)
                 ),
-            )            
-            mf_sliced.to_netcdf("timefile" + str(ii) + ".nc")
-            mf_sliced = xr.open_dataset("timefile" + str(ii) + ".nc")
+            )
+            mf_sliced.load()            
+            #~ mf_sliced.to_netcdf("timefile" + str(ii) + ".nc")
+            #~ mf_sliced = xr.open_dataset("timefile" + str(ii) + ".nc")
             mf_interp = mf_sliced.interp(
                 time=[this_time],
                 latitude=[lat_to_interp],
@@ -1049,8 +1051,9 @@ def trajectory_at_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
     ds_local = era5_interp_column_by_time(
         mf_list, vars_for_traj, time_origin, lat_origin, lon_origin
     )
-    ds_local.to_netcdf("ds_local.nc")
-    ds_local = xr.open_dataset("ds_local.nc")
+    ds_local.load()
+    #ds_local.to_netcdf("ds_local.nc")
+    #ds_local = xr.open_dataset("ds_local.nc")
     add_heights_and_pressures(ds_local)
     u_traj, v_traj = get_velocity_from_strategy(ds_local, trajectory_dict)
     time_exact_index = np.argmax(ds_traj["time"] == time_origin)
@@ -1078,8 +1081,9 @@ def trajectory_around_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
     ds_interpolated = era5_interp_column_interp_time(
         mf_list, vars_for_traj, time_origin, time_smaller_v, time_greater_v, lat_origin, lon_origin
     )
-    ds_interpolated.to_netcdf("ds_interpolated.nc")
-    ds_interpolated = xr.open_dataset("ds_interpolated.nc")
+    ds_interpolated.load()
+    #ds_interpolated.to_netcdf("ds_interpolated.nc")
+    #ds_interpolated = xr.open_dataset("ds_interpolated.nc")
     add_heights_and_pressures(ds_interpolated)
     u_guess, v_guess = get_velocity_from_strategy(ds_interpolated, trajectory_dict)
     d_time_forward = ((time_greater - time_origin) / np.timedelta64(1, "s")).values
@@ -1092,15 +1096,17 @@ def trajectory_around_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
         ds_begin_column = era5_interp_column_by_time(
             mf_list, vars_for_traj, time_smaller_v, lat_origin, lon_origin
         )
-        ds_begin_column.to_netcdf("ds_begin_column.nc")
-        ds_begin_column = xr.open_dataset("ds_begin_column.nc")
+        ds_begin_column.load()
+        #~ ds_begin_column.to_netcdf("ds_begin_column.nc")
+        #~ ds_begin_column = xr.open_dataset("ds_begin_column.nc")
         add_heights_and_pressures(ds_begin_column)
         u_begin, v_begin = get_velocity_from_strategy(ds_begin_column, trajectory_dict)
         ds_end_column = era5_interp_column_by_time(
             mf_list, vars_for_traj, time_greater_v, lat_origin, lon_origin
         )
-        ds_end_column.to_netcdf("ds_end_column.nc")
-        ds_end_column = xr.open_dataset("ds_end_column.nc")
+        ds_end_column.load()
+        #~ ds_end_column.to_netcdf("ds_end_column.nc")
+        #~ ds_end_column = xr.open_dataset("ds_end_column.nc")
         add_heights_and_pressures(ds_end_column)
         u_end, v_end = get_velocity_from_strategy(ds_end_column, trajectory_dict)
         u_guess = 0.5 * (u_begin + u_end)
@@ -1148,8 +1154,9 @@ def forward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
                 lat_begin,
                 lon_begin,
             )
-            ds_end_column.to_netcdf("ds_end_column.nc")
-            ds_end_column = xr.open_dataset("ds_end_column.nc")
+            ds_end_column.load()
+            #~ ds_end_column.to_netcdf("ds_end_column.nc")
+            #~ ds_end_column = xr.open_dataset("ds_end_column.nc")
             add_heights_and_pressures(ds_end_column)
             u_end, v_end = get_velocity_from_strategy(ds_end_column, trajectory_dict)
             u_guess = 0.5 * (u_begin + u_end)
@@ -1190,8 +1197,9 @@ def backward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
                 lat_end,
                 lon_end,
             )
-            ds_begin_column.to_netcdf("ds_begin_column.nc")
-            ds_begin_column = xr.open_dataset("ds_begin_column.nc")
+            ds_begin_column.load()
+            #~ ds_begin_column.to_netcdf("ds_begin_column.nc")
+            #~ ds_begin_column = xr.open_dataset("ds_begin_column.nc")
             add_heights_and_pressures(ds_begin_column)
             u_begin, v_begin = get_velocity_from_strategy(
                 ds_begin_column, trajectory_dict
@@ -1304,13 +1312,15 @@ def dummy_forcings(mf_list, forcings_dict):
         out_levels = np.arange(0, 10000.0, 40.0)
         ds_smaller = era5_subset_by_time(mf_list, this_time, lats_lons_dict)
         # Save intermediate results
-        ds_smaller.to_netcdf("ds_smaller.nc")
-        ds_smaller = xr.open_dataset("ds_smaller.nc")
+        ds_smaller.load()
+        #ds_smaller.to_netcdf("ds_smaller.nc")
+        #ds_smaller = xr.open_dataset("ds_smaller.nc")
         add_heights_and_pressures(ds_smaller)
         add_auxiliary_variables(
             ds_smaller, ["theta", "rho", "w_pressure_corr", "w_corr"], lats_lons_dict
         )
         ds_time_height = era5_on_height_levels(ds_smaller, out_levels)
+        ds_smaller.close()
         era5_add_lat_lon_meshgrid(ds_time_height)
         ds_profiles = era5_single_point(ds_time_height, lats_lons_dict)
         ds_era5_mean = era5_box_mean(ds_time_height, lats_lons_dict)

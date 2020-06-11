@@ -464,10 +464,8 @@ def era5_subset_by_time(mf_list, this_time, dictionary):
     mf_extract = []
     for mf_list_element in mf_list:
         if "level" in mf_list_element.coords:
-            try:
-                mf_list_element = mf_list_element.drop_vars(["z", "lnsp"])
-            except:
-                pass
+            if "z" in mf_list_element.variables:
+                mf_list_element = mf_list_element.drop_vars(["z"])
         mf_extract.append(
             mf_list_element.sel(
                 time=[this_time],
@@ -488,10 +486,27 @@ def era5_interp_column_by_time(mf_list, this_time, lat_to_interp, lon_to_interp)
     mf_extract = []
     for mf_list_element in mf_list:
         if "level" in mf_list_element.coords:
-            try:
-                mf_list_element = mf_list_element.drop_vars(["z", "lnsp"])
-            except:
-                pass
+            if "z" in mf_list_element.variables:
+                mf_list_element = mf_list_element.drop_vars(["z"])
+        mf_time=mf_list_element.sel(time=[this_time])
+        mf_extract.append(
+            mf_time.interp(
+                latitude=[lat_to_interp],
+                longitude=[longitude_set_meridian(lon_to_interp)],
+            )
+        )
+    ds_at_location = xr.merge(mf_extract)
+    return ds_at_location
+
+
+def era5_interp_column_interp_time(mf_list, this_time, lat_to_interp, lon_to_interp):
+    """Returns the dataset interpolated to given latitude and longitude
+    with latitude and longitude dimensions retained"""
+    mf_extract = []
+    for mf_list_element in mf_list:
+        if "level" in mf_list_element.coords:
+            if "z" in mf_list_element.variables:
+                mf_list_element = mf_list_element.drop_vars(["z"])
         mf_extract.append(
             mf_list_element.interp(
                 time=[this_time],
@@ -1008,6 +1023,7 @@ def trajectory_at_origin(mf_list, ds_traj, trajectory_dict):
     ds_traj["u_traj"][time_exact_index] = u_traj
     ds_traj["v_traj"][time_exact_index] = v_traj
     ds_traj["processed"][time_exact_index] = True
+    ds_traj.to_netcdf("ds_traj.nc")
 
 
 def trajectory_around_origin(mf_list, ds_traj, trajectory_dict):
@@ -1023,7 +1039,7 @@ def trajectory_around_origin(mf_list, ds_traj, trajectory_dict):
     time_smaller = ds_traj["time"][time_smaller_index]
     time_greater_v = time_greater.values
     time_smaller_v = time_smaller.values
-    ds_interpolated = era5_interp_column_by_time(
+    ds_interpolated = era5_interp_column_interp_time(
         mf_list, time_origin, lat_origin, lon_origin
     )
     add_heights_and_pressures(ds_interpolated)
@@ -1057,6 +1073,7 @@ def trajectory_around_origin(mf_list, ds_traj, trajectory_dict):
     ds_traj["u_traj"][time_greater_index] = u_end
     ds_traj["v_traj"][time_greater_index] = v_end
     ds_traj["processed"][time_greater_index] = True
+    ds_traj.to_netcdf("ds_traj.nc")
 
 
 def forward_trajectory(mf_list, ds_traj, trajectory_dict):
@@ -1094,6 +1111,7 @@ def forward_trajectory(mf_list, ds_traj, trajectory_dict):
         ds_traj["u_traj"][forward_index] = u_end
         ds_traj["v_traj"][forward_index] = v_end
         ds_traj["processed"][forward_index] = True
+        ds_traj.to_netcdf("ds_traj.nc")
 
 
 def backward_trajectory(mf_list, ds_traj, trajectory_dict):
@@ -1131,6 +1149,7 @@ def backward_trajectory(mf_list, ds_traj, trajectory_dict):
         ds_traj["u_traj"][backward_index] = u_begin
         ds_traj["v_traj"][backward_index] = v_begin
         ds_traj["processed"][backward_index] = True
+        ds_traj.to_netcdf("ds_traj.nc")
 
 
 def dummy_trajectory(mf_list, trajectory_dict):
@@ -1251,6 +1270,7 @@ def dummy_forcings(mf_list, forcings_dict):
         add_geowind_around_centre(ds_time_step, lats_lons_dict)
         ds_time_step.reset_coords(["latitude", "longitude"])
         ds_out = xr.combine_by_coords((ds_out, ds_time_step))
+        ds_out.to_netcdf("ds_along_traj.nc")
     # Add trajectory information
     ds_out = xr.combine_by_coords((ds_out, ds_traj))
     fix_units(ds_out)

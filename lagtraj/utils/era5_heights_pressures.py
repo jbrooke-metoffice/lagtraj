@@ -1130,7 +1130,7 @@ def backward_trajectory(ds_time_selection, ds_traj, trajectory_dict):
         ds_traj["processed"][backward_index] = True
 
 
-def dummy_trajectory(mf_dataset, trajectory_dict):
+def dummy_trajectory(mf_list, trajectory_dict):
     """Trajectory example: needs to be integrated into main functionality"""
     time_origin = np.datetime64(trajectory_dict["datetime_origin"])
     start_date = time_origin - np.timedelta64(
@@ -1139,10 +1139,13 @@ def dummy_trajectory(mf_dataset, trajectory_dict):
     end_date = time_origin + np.timedelta64(
         trajectory_dict["forward_duration_hours"], "h"
     )
-    time_start_mf = np.max(mf_dataset["time"].where(mf_dataset["time"] <= start_date))
-    time_end_mf = np.min(mf_dataset["time"].where(mf_dataset["time"] >= end_date))
-    ds_time_selection = mf_dataset.sel(time=slice(time_start_mf, time_end_mf))
-    ds_traj = xr.Dataset(coords={"time": ds_time_selection.time})
+    mf_extract_time=[]
+    for mf_list_element in mf_list:
+        time_start_mf = np.max(mf_list_element["time"].where(mf_list_element["time"] <= start_date))
+        time_end_mf = np.min(mf_list_element["time"].where(mf_list_element["time"] >= end_date))
+        mf_extract_time.append(mf_list_element.sel(time=slice(time_start_mf, time_end_mf)))
+    ds_time_selection=xr.merge(mf_extract_time)
+    ds_traj = xr.Dataset(coords={"time": ds_time_selection.time})    
     time_len = len(ds_time_selection["time"].values)
     ds_traj["lat_traj"] = (
         ("time"),
@@ -1192,15 +1195,18 @@ def dummy_trajectory(mf_dataset, trajectory_dict):
     ds_traj.to_netcdf("ds_traj.nc")
 
 
-def dummy_forcings(mf_dataset, forcings_dict):
+def dummy_forcings(mf_list, forcings_dict):
     """Forcings example: needs to be integrated into main functionality"""
     ds_out = xr.Dataset()
     ds_traj = xr.open_dataset(forcings_dict["traj_file"])
     for index in range(len(ds_traj["time"])):
         this_time = ds_traj["time"][index]
-        # Ugly
-        mf_index = np.argmax(mf_dataset["time"] == this_time).values
-        ds_time = mf_dataset.isel(time=[mf_index])
+        mf_extract_time=[]
+        for mf_list_element in mf_list:
+            # Ugly
+            mf_index = np.argmax(mf_list_element["time"] == this_time).values
+            mf_extract_time.append(mf_list_element.isel(time=[mf_index]))
+        ds_time=xr.merge(mf_extract_time)
         half_averaging_width = 0.5 * forcings_dict["averaging_width"]
         lats_lons_dict = {
             "lat_min": ds_traj["lat_traj"][index].values - half_averaging_width,
@@ -1262,7 +1268,6 @@ def main():
     ds_list = [ds_model_an, ds_single_an, ds_model_fc, ds_single_fc]
     for this_ds in ds_list:
         era5_normalise_longitude(this_ds, ds_model_an)
-    ds_merged = xr.merge(ds_list)
     dummy_trajectory_dict = {
         "lat_origin": 13.3,
         "lon_origin": -57.717,
@@ -1279,7 +1284,7 @@ def main():
         "pres_cutoff_start": 60000.0,
         "pres_cutoff_end": 50000.0,
     }
-    dummy_trajectory(ds_merged, dummy_trajectory_dict)
+    dummy_trajectory(ds_list, dummy_trajectory_dict)
     dummy_forcings_dict = {
         "gradients_strategy": "both",
         "mask": "ocean",
@@ -1288,7 +1293,7 @@ def main():
         "w_cutoff_start": 70000.0,
         "w_cutoff_end": 40000.0,
     }
-    dummy_forcings(ds_merged, dummy_forcings_dict)
+    dummy_forcings(ds_list, dummy_forcings_dict)
 
 
 if __name__ == "__main__":

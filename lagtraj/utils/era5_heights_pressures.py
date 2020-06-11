@@ -1002,6 +1002,7 @@ def trajectory_at_origin(mf_list, ds_traj, trajectory_dict):
     ds_local = era5_interp_column_by_time(mf_list, time_origin, lat_origin, lon_origin)
     add_heights_and_pressures(ds_local)
     u_traj, v_traj = get_velocity_from_strategy(ds_local, trajectory_dict)
+    time_exact_index = np.argmax(ds_traj["time"] == time_origin)
     ds_traj["lat_traj"][time_exact_index] = lat_origin
     ds_traj["lon_traj"][time_exact_index] = lon_origin
     ds_traj["u_traj"][time_exact_index] = u_traj

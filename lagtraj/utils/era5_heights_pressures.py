@@ -819,9 +819,9 @@ def era5_adv_tendencies(ds_profile, list_of_vars, dictionary):
     ds_out = xr.Dataset(coords={"time": ds_profile.time, "lev": ds_profile.lev})
     for variable in list_of_vars:
         tendency_array = (
-            (ds_profile["u"].values - dictionary["u_traj"])
+            - (ds_profile["u"].values - dictionary["u_traj"])
             * ds_profile["d" + variable + "dx"].values
-            + (ds_profile["v"].values - dictionary["v_traj"])
+            - (ds_profile["v"].values - dictionary["v_traj"])
             * ds_profile["d" + variable + "dy"].values
         )
         ds_out[variable + "_advtend"] = (
@@ -834,9 +834,9 @@ def era5_adv_tendencies(ds_profile, list_of_vars, dictionary):
         )
         if dictionary["gradients_strategy"] == "both":
             tendency_array = (
-                (ds_profile["u"].values - dictionary["u_traj"])
+                - (ds_profile["u"].values - dictionary["u_traj"])
                 * ds_profile["d" + variable + "dx_bound"].values
-                + (ds_profile["v"].values - dictionary["v_traj"])
+                -(ds_profile["v"].values - dictionary["v_traj"])
                 * ds_profile["d" + variable + "dy_bound"].values
             )
             ds_out[variable + "_advtend_bound"] = (

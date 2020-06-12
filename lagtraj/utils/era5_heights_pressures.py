@@ -563,7 +563,7 @@ def era5_interp_column_interp_time(
 
 
 def era5_single_point(ds_domain, dictionary):
-    #~ """Extracts a local profile at the nearest point"""
+    # ~ """Extracts a local profile at the nearest point"""
     ds_at_location = ds_domain.sel(
         latitude=dictionary["lat"],
         longitude=longitude_set_meridian(dictionary["lon"]),
@@ -1097,7 +1097,7 @@ def trajectory_around_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
     )
     add_heights_and_pressures(ds_interpolated)
     u_guess, v_guess = get_velocity_from_strategy(ds_interpolated, trajectory_dict)
-    ds_interpolated.close()    
+    ds_interpolated.close()
     d_time_forward = ((time_greater - time_origin) / np.timedelta64(1, "s")).values
     d_time_total = ((time_greater - time_smaller) / np.timedelta64(1, "s")).values
     # iteratively find velocity at adjacent points in time
@@ -1358,10 +1358,18 @@ def main():
     files_single_an = "output_domains/single_an_*_eurec4a_circle_eul_domain.nc"
     files_model_fc = "output_domains/model_fc_*_eurec4a_circle_eul_domain.nc"
     files_single_fc = "output_domains/single_fc_*_eurec4a_circle_eul_domain.nc"
-    ds_model_an = xr.open_mfdataset(files_model_an, combine='nested', concat_dim='time', chunks={'time':1})
-    ds_single_an = xr.open_mfdataset(files_single_an, combine='nested', concat_dim='time', chunks={'time':1})
-    ds_model_fc = xr.open_mfdataset(files_model_fc, combine='nested', concat_dim='time', chunks={'time':1})
-    ds_single_fc = xr.open_mfdataset(files_single_fc, combine='nested', concat_dim='time', chunks={'time':1})
+    ds_model_an = xr.open_mfdataset(
+        files_model_an, combine="nested", concat_dim="time", chunks={"time": 1}
+    )
+    ds_single_an = xr.open_mfdataset(
+        files_single_an, combine="nested", concat_dim="time", chunks={"time": 1}
+    )
+    ds_model_fc = xr.open_mfdataset(
+        files_model_fc, combine="nested", concat_dim="time", chunks={"time": 1}
+    )
+    ds_single_fc = xr.open_mfdataset(
+        files_single_fc, combine="nested", concat_dim="time", chunks={"time": 1}
+    )
     ds_list = [ds_model_an, ds_single_an, ds_model_fc, ds_single_fc]
     for this_ds in ds_list:
         era5_normalise_longitude(this_ds, ds_model_an)
@@ -1391,6 +1399,7 @@ def main():
         "w_cutoff_end": 40000.0,
     }
     dummy_forcings(ds_list, dummy_forcings_dict)
+
 
 if __name__ == "__main__":
     main()

@@ -564,10 +564,9 @@ def era5_interp_column_interp_time(
 
 def era5_single_point(ds_domain, dictionary):
     # ~ """Extracts a local profile at the nearest point"""
-    ds_at_location = ds_domain.sel(
+    ds_at_location = ds_domain.interp(
         latitude=dictionary["lat"],
         longitude=longitude_set_meridian(dictionary["lon"]),
-        method="nearest",
     )
     return ds_at_location
 
@@ -1112,13 +1111,13 @@ def trajectory_around_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
             lat_origin, lon_origin, u_guess, v_guess, d_time_forward, d_time_total
         )
         ds_begin_column = era5_interp_column_by_time(
-            mf_list, vars_for_traj, time_smaller_v, lat_origin, lon_origin
+            mf_list, vars_for_traj, time_smaller_v, backward_lat, backward_lon
         )
         add_heights_and_pressures(ds_begin_column)
         u_begin, v_begin = get_velocity_from_strategy(ds_begin_column, trajectory_dict)
         ds_begin_column.close()
         ds_end_column = era5_interp_column_by_time(
-            mf_list, vars_for_traj, time_greater_v, lat_origin, lon_origin
+            mf_list, vars_for_traj, time_greater_v, forward_lat, forward_lon
         )
         add_heights_and_pressures(ds_end_column)
         u_end, v_end = get_velocity_from_strategy(ds_end_column, trajectory_dict)
@@ -1165,8 +1164,8 @@ def forward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
                 mf_list,
                 vars_for_traj,
                 ds_traj["time"][forward_index].values,
-                lat_begin,
-                lon_begin,
+                forward_lat,
+                forward_lon,
             )
             add_heights_and_pressures(ds_end_column)
             u_end, v_end = get_velocity_from_strategy(ds_end_column, trajectory_dict)
@@ -1206,8 +1205,8 @@ def backward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
                 mf_list,
                 vars_for_traj,
                 ds_traj["time"][backward_index].values,
-                lat_end,
-                lon_end,
+                backward_lat,
+                backward_lon,
             )
             add_heights_and_pressures(ds_begin_column)
             u_begin, v_begin = get_velocity_from_strategy(
@@ -1280,7 +1279,7 @@ def dummy_trajectory(mf_list, trajectory_dict):
     )
     ds_traj["processed"].values[:] = False
     time_exact_match = time_origin in ds_traj["time"]
-    vars_for_traj = ["u", "v", "sp", "z", "t", "q"]
+    vars_for_traj = ["u", "v", "sp", "z", "t", "q", "lsm"]
     if trajectory_dict["velocity_strategy"] == "stationary":
         stationary_trajectory(ds_traj, trajectory_dict)
     if trajectory_dict["velocity_strategy"] == "prescribed_velocity":
@@ -1386,14 +1385,14 @@ def main():
         "backward_duration_hours": 3,
         "forward_duration_hours": 1,
         "nr_iterations_traj": 10,
-        "velocity_strategy": "lower_troposphere_humidity_weighted",
+        #"velocity_strategy": "lower_troposphere_humidity_weighted",
         # "velocity_strategy": "prescribed_velocity",
         # "u_traj" : -6.0,
         # "v_traj" : -0.25,
-        # "velocity_strategy": "velocity_at_height",
-        # "velocity_height": 1000.0,
-        "pres_cutoff_start": 60000.0,
-        "pres_cutoff_end": 50000.0,
+        "velocity_strategy": "velocity_at_height",
+        "velocity_height": 500.0,
+        #"pres_cutoff_start": 60000.0,
+        #"pres_cutoff_end": 50000.0,
     }
     dummy_trajectory(ds_list, dummy_trajectory_dict)
     dummy_forcings_dict = {

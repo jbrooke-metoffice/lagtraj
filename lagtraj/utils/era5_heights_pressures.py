@@ -12,18 +12,17 @@ TODO
 - More focings/variable (e.g. humidity forcings and large-scale tendencies).
 - Use of local versus averaged velocity in trajectories
 - Distinguish box sizes for averages, gradients and trajectory calculations.
-- Implement selection as ciricle with radius, rather than box? M
-- Optimise code (note that interpolation is currently expensive, possibly because coordinates are not assumed to be ordered)
+- Implement selection as circle with radius, rather than box?
+- Optimise code further
 - Add more auxiliary variables
 - Move some functionality (e.g. auxiliary variables) to more generic utilities
 - Test/develop way of dealing with antimeridian (and poles, for circular boxes).
   Note: HIGH-TUNE/DEPHY prefers longitude between -180..180?
-- Implement HIGH-TUNE conventions, variable renaming, attributes
-- HIGH-TUNE/DEPHY needs netcdf3?
+- Implement HIGH-TUNE conventions, variable renaming, attributes, NETCDF3
 - Discuss need to check/convert float vs double (HIGH-TUNE/DEPHY expects double)
 - Discuss data filter and weight procedures
 - Use more exact location for means and gradients based on interpolation/weights?
-- Use budgets over boundarie instead of gradients for large-scale tendencies?
+- Use budgets over boundaries instead of gradients for large-scale tendencies?
 - Compare regression and boundary gradients for data
 - Look into other mean/gradient techniques (e.g. Gaussian weighted, see CSET code).
 - Further documentation
@@ -62,14 +61,17 @@ cp = 1004.0
 rd_over_cp = rd / cp
 p_ref_inv = 1.0 / p_ref
 r_earth = 6371000.0
+r_earth_inv = 1.0 / r_earth
 pi = np.pi
 omega = 7.2921150e-5
 
-longitude_tolerance = 0.001  # (about 100m)
-samp_margin = 0.2
+# PARAMETERS OF CODE
+longitude_tolerance = 0.001  # (longitude alignment tolerance: about 100m)
+samp_margin = 0.2  # Sampling margin before interpolation!
 
 levels_file = os.path.dirname(__file__) + "/137levels.dat"
 levels_table = pd.read_table(levels_file, sep="\s+")
+
 # skip the first row, as it corresponds to the top of the atmosphere
 # which is not in the data
 a_coeffs_137 = levels_table["a[Pa]"].values[1:]
@@ -80,9 +82,8 @@ b_coeffs_137 = levels_table["b"].values[1:]
 def calculate_heights_and_pressures(
     p_surf, height_surf, a_coeffs, b_coeffs, t_field, q_field
 ):
-    """Calculate heights and pressures at model levels using
-    the hydrostatic equation (not taking into account hydrometeors).
-    """
+    """Calculate heights and pressures at model levels using the
+    hydrostatic equation (not taking into account hydrometeors). """
     k_max = t_field.shape[0]
     j_max = t_field.shape[1]
     i_max = t_field.shape[2]
@@ -140,11 +141,9 @@ def steffen_3d(
     lower_extrapolation_surface,
     lower_extrapolation_with_gradient=False,
 ):
-    """
-    Performs Steffen interpolation on each individual column.
-    Steffen, M. (1990). A simple method for monotonic interpolation
-    in one dimension. Astronomy and Astrophysics, 239, 443.
-    """
+    """ Performs Steffen interpolation on each individual column.
+    Steffen, M. (1990). A simple method for monotonic interpolation in
+    one dimension. Astronomy and Astrophysics, 239, 443. """
     k_max = input_data.shape[0]
     j_max = input_data.shape[1]
     i_max = input_data.shape[2]
@@ -308,8 +307,8 @@ def add_heights_and_pressures(ds_from_era5):
 
 
 def era5_on_height_levels(ds_model_levels, heights_array):
-    """Converts ERA5 model level data to data on height levels
-    using Steffen interpolation"""
+    """Converts ERA5 model level data to data on height levels using
+    Steffen interpolation"""
     if isinstance(heights_array[0], numbers.Integral):
         raise Exception("Heights need to be floating numbers, rather than integers")
     heights_coord = {
@@ -324,8 +323,8 @@ def era5_on_height_levels(ds_model_levels, heights_array):
         }
     )
     time_steps = len(ds_model_levels["height_f"])
-    shape_p_levels = np.shape(ds_model_levels["height_f"])
-    shape_h_levels = (shape_p_levels[0],) + (len(heights_array),) + shape_p_levels[2:]
+    shape_m_levels = np.shape(ds_model_levels["height_f"])
+    shape_h_levels = (shape_m_levels[0],) + (len(heights_array),) + shape_m_levels[2:]
     for variable in ds_model_levels.variables:
         if ds_model_levels[variable].dims == (
             "time",
@@ -347,6 +346,8 @@ def era5_on_height_levels(ds_model_levels, heights_array):
     for time_index in range(time_steps):
         h_f_inverse = ds_model_levels["height_f"][time_index, ::-1, :, :].values
         h_h_inverse = ds_model_levels["height_h"][time_index, ::-1, :, :].values
+        # Points over sea that have height above zero but below 5m
+        # Here, profiles are extended to 0m
         sea_mask = (
             (ds_model_levels["height_h"][time_index, -1, :, :].values < 5.0)
             * (ds_model_levels["height_h"][time_index, -1, :, :].values > 1.0e-6)
@@ -356,17 +357,17 @@ def era5_on_height_levels(ds_model_levels, heights_array):
             sea_mask, -1.0e-6, ds_model_levels["height_h"][time_index, -1, :, :]
         ).values
         for variable in ds_model_levels.variables:
-            if np.shape(ds_model_levels[variable]) == shape_p_levels:
+            if np.shape(ds_model_levels[variable]) == shape_m_levels:
                 if variable in ["height_h", "p_h"]:
                     h_inverse = h_h_inverse
                 else:
                     h_inverse = h_f_inverse
-                field_p_levels = ds_model_levels[variable][
+                field_m_levels = ds_model_levels[variable][
                     time_index, ::-1, :, :
                 ].values
                 if variable in ["p_h", "p_f", "height_h", "height_f"]:
                     ds_height_levels[variable][time_index] = steffen_3d(
-                        field_p_levels,
+                        field_m_levels,
                         h_inverse,
                         heights_array,
                         lower_extrapolation_with_mask,
@@ -374,7 +375,7 @@ def era5_on_height_levels(ds_model_levels, heights_array):
                     )
                 else:
                     ds_height_levels[variable][time_index] = steffen_3d(
-                        field_p_levels,
+                        field_m_levels,
                         h_inverse,
                         heights_array,
                         lower_extrapolation_with_mask,
@@ -383,10 +384,9 @@ def era5_on_height_levels(ds_model_levels, heights_array):
 
 
 def add_auxiliary_variable(ds_to_expand, var, settings_dictionary):
-    """Adds auxiliary variables to arrays.
-    Alternatively, the equations could be separated out to another utility
-    I think this may be adding a 'black box layer' though
-    To be discussed"""
+    """Adds auxiliary variables to arrays. Alternatively, the equations
+    could be separated out to another utility I think this may be
+    adding a 'black box layer' though To be discussed"""
     if var == "theta":
         attr_dict = {"units": "K", "long_name": "potential temperature"}
         ds_to_expand[var] = (
@@ -515,7 +515,7 @@ def era5_interp_column_by_time(
             mf_extract.append(mf_interp)
     ds_at_location = xr.merge(mf_extract)
     ds_at_location.load()
-    del mf_extract
+    del mf_extract, mf_interp
     return ds_at_location
 
 
@@ -558,15 +558,14 @@ def era5_interp_column_interp_time(
             mf_extract.append(mf_interp)
     ds_at_location = xr.merge(mf_extract)
     ds_at_location.load()
-    del mf_extract
+    del mf_extract, mf_interp
     return ds_at_location
 
 
 def era5_single_point(ds_domain, dictionary):
-    # ~ """Extracts a local profile at the nearest point"""
+    """Extracts a local profile at the nearest point"""
     ds_at_location = ds_domain.interp(
-        latitude=dictionary["lat"],
-        longitude=longitude_set_meridian(dictionary["lon"]),
+        latitude=dictionary["lat"], longitude=longitude_set_meridian(dictionary["lon"]),
     )
     return ds_at_location
 
@@ -693,6 +692,7 @@ def boundary_gradients(x_array, y_array, val_array):
 
 @njit
 def regression_gradients(x_array, y_array, val_array):
+    """Numba function for regression gradients"""
     len_temp = np.shape(val_array)[0]
     len_levels = np.shape(val_array)[1]
     x_gradient_array = np.empty((len_temp, len_levels))
@@ -702,13 +702,11 @@ def regression_gradients(x_array, y_array, val_array):
     ones_flat = np.ones(np.shape(x_flat))
     for this_time in range(len_temp):
         for this_level in range(len_levels):
-            data_flat = val_array[
-                this_time, this_level, :, :
-            ].flatten()
-            data_flat_filter = np.expand_dims(data_flat[~np.isnan(data_flat)],axis=1)
-            x_flat_filter = np.expand_dims(x_flat[~np.isnan(data_flat)],axis=1)
-            y_flat_filter =np.expand_dims( y_flat[~np.isnan(data_flat)],axis=1)
-            ones_flat_filter = np.expand_dims(ones_flat[~np.isnan(data_flat)],axis=1)
+            data_flat = val_array[this_time, this_level, :, :].flatten()
+            data_flat_filter = np.expand_dims(data_flat[~np.isnan(data_flat)], axis=1)
+            x_flat_filter = np.expand_dims(x_flat[~np.isnan(data_flat)], axis=1)
+            y_flat_filter = np.expand_dims(y_flat[~np.isnan(data_flat)], axis=1)
+            ones_flat_filter = np.expand_dims(ones_flat[~np.isnan(data_flat)], axis=1)
             oxy_mat = np.hstack((ones_flat_filter, x_flat_filter, y_flat_filter))
             theta = np.dot(
                 np.dot(
@@ -720,12 +718,11 @@ def regression_gradients(x_array, y_array, val_array):
             x_gradient_array[this_time, this_level] = theta[0][1]
             y_gradient_array[this_time, this_level] = theta[0][2]
     return x_gradient_array, y_gradient_array
-    
-    
+
+
 def era5_boundary_gradients(ds_box, variable, dictionary):
-    """ Calculate gradients from boundary values
-    Using distances along latitude and longitude axes
-    Weight by box size?"""
+    """ Calculate gradients from boundary values Using distances along
+    latitude and longitude axes. Weight by box size?"""
     ds_filtered = ds_box
     if "mask" in dictionary:
         mask = era5_mask(ds_box, dictionary)
@@ -757,8 +754,8 @@ def era5_regression_gradients(ds_box, variable, dictionary):
     y_array = lat_dist(lat1_point, lat2_mg)
     val_array = ds_filtered[variable].values
     return regression_gradients(x_array, y_array, val_array)
-    
-    
+
+
 def era5_gradients(ds_field, list_of_vars, dictionary):
     """Add variables defined in list to dictionary"""
     ds_out = xr.Dataset(coords={"time": ds_field.time, "lev": ds_field.lev})
@@ -819,7 +816,7 @@ def era5_adv_tendencies(ds_profile, list_of_vars, dictionary):
     ds_out = xr.Dataset(coords={"time": ds_profile.time, "lev": ds_profile.lev})
     for variable in list_of_vars:
         tendency_array = (
-            - (ds_profile["u"].values - dictionary["u_traj"])
+            -(ds_profile["u"].values - dictionary["u_traj"])
             * ds_profile["d" + variable + "dx"].values
             - (ds_profile["v"].values - dictionary["v_traj"])
             * ds_profile["d" + variable + "dy"].values
@@ -834,9 +831,9 @@ def era5_adv_tendencies(ds_profile, list_of_vars, dictionary):
         )
         if dictionary["gradients_strategy"] == "both":
             tendency_array = (
-                - (ds_profile["u"].values - dictionary["u_traj"])
+                -(ds_profile["u"].values - dictionary["u_traj"])
                 * ds_profile["d" + variable + "dx_bound"].values
-                -(ds_profile["v"].values - dictionary["v_traj"])
+                - (ds_profile["v"].values - dictionary["v_traj"])
                 * ds_profile["d" + variable + "dy_bound"].values
             )
             ds_out[variable + "_advtend_bound"] = (
@@ -891,25 +888,26 @@ def add_geowind_around_centre(ds_profile, dictionary):
 
 
 def trace_one_way(lat, lon, u_traj, v_traj, d_time, lforward=True):
-    """Calculates previous position given lat,lon,u_traj,v_traj, and d_time
-    explicitly set d_time positive, to prevent accidental backward trajectory"""
+    """Calculates previous position given lat,lon,u_traj,v_traj, and
+    d_time explicitly set d_time positive, to prevent accidental
+    backward trajectory"""
     if d_time < 0.0:
         raise Exception("Expecting positive d_time in back-tracing")
-    theta = np.arctan2(v_traj, u_traj) % (2 * pi)
+    theta = np.arctan2(v_traj, u_traj) % (2.0 * pi)
     if lforward:
-        bearing = ((pi / 2) - theta) % (2 * pi)
+        bearing = (0.5 * pi - theta) % (2.0 * pi)
     else:
-        bearing = ((3 * pi / 2) - theta) % (2 * pi)
-    dist = np.sqrt(u_traj ** 2 + v_traj ** 2) * d_time
+        bearing = (1.5 * pi - theta) % (2.0 * pi)
+    dist = np.sqrt(u_traj * u_traj + v_traj * v_traj) * d_time
     lat_rad = np.deg2rad(lat)
     lon_rad = np.deg2rad(lon)
     traced_lat_rad = np.arcsin(
-        np.sin(lat_rad) * np.cos(dist / r_earth)
-        + np.cos(lat_rad) * np.sin(dist / r_earth) * np.cos(bearing)
+        np.sin(lat_rad) * np.cos(dist * r_earth_inv)
+        + np.cos(lat_rad) * np.sin(dist * r_earth_inv) * np.cos(bearing)
     )
     traced_lon_rad = lon_rad + np.arctan2(
-        np.sin(bearing) * np.sin(dist / r_earth) * np.cos(lat_rad),
-        np.cos(dist / r_earth) - np.sin(lat_rad) * np.sin(lat_rad),
+        np.sin(bearing) * np.sin(dist * r_earth_inv) * np.cos(lat_rad),
+        np.cos(dist * r_earth_inv) - np.sin(lat_rad) * np.sin(lat_rad),
     )
     traced_lat = np.rad2deg(traced_lat_rad)
     traced_lon = longitude_set_meridian(np.rad2deg(traced_lon_rad))
@@ -917,19 +915,21 @@ def trace_one_way(lat, lon, u_traj, v_traj, d_time, lforward=True):
 
 
 def trace_forward(lat, lon, u_traj, v_traj, d_time):
-    """Wrapper function for forward trajectory, here d_time is positive"""
+    """Wrapper function for forward trajectory, here d_time is
+    positive"""
     return trace_one_way(lat, lon, u_traj, v_traj, d_time, True)
 
 
 def trace_backward(lat, lon, u_traj, v_traj, d_time):
-    """Wrapper function for backward trajectory, here d_time is positive"""
+    """Wrapper function for backward trajectory, here d_time is
+    positive"""
     return trace_one_way(lat, lon, u_traj, v_traj, d_time, False)
 
 
 def trace_two_way(lat, lon, u_traj, v_traj, d_time_forward, d_time_total):
-    """Calculates both previous and next position given a point in between"""
+    """Calculates both previous and next position given a point in
+    between"""
     d_time_backward = d_time_total - d_time_forward
-
     forward_lat, forward_lon = trace_one_way(
         lat, lon, u_traj, v_traj, d_time_forward, True
     )
@@ -940,8 +940,8 @@ def trace_two_way(lat, lon, u_traj, v_traj, d_time_forward, d_time_total):
 
 
 def cos_transition(absolute_input, transition_start, transition_end):
-    """function that smoothly transitions from 1 to 0 using a cosine-shaped
-    transition between start and end"""
+    """function that smoothly transitions from 1 to 0 using a
+    cosine-shaped transition between start and end"""
     normalised_input = (absolute_input - transition_start) / (
         transition_end - transition_start
     )
@@ -970,7 +970,7 @@ def weighted_velocity(ds_for_vel, trajectory_dict):
 
 
 def velocity_at_height(ds_for_vel, trajectory_dict):
-    """Velocit at one height: needs more work"""
+    """Velocity at one height: needs more work"""
     single_height_level = np.array([trajectory_dict["velocity_height"]])
     ds_on_height_level = era5_on_height_levels(ds_for_vel, single_height_level)
     # For a single colum, data dimensions are all 1
@@ -978,7 +978,7 @@ def velocity_at_height(ds_for_vel, trajectory_dict):
 
 
 def get_velocity_from_strategy(ds_column, trajectory_dict):
-    """wrapper routine, determine velocity according to strategy"""
+    """Wrapper routine, determine velocity according to strategy"""
     if trajectory_dict["velocity_strategy"] == "lower_troposphere_humidity_weighted":
         u_traj, v_traj = weighted_velocity(ds_column, trajectory_dict)
     elif trajectory_dict["velocity_strategy"] == "velocity_at_height":
@@ -1079,7 +1079,7 @@ def trajectory_at_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
 
 
 def trajectory_around_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
-    """Adds data around origin point that is not directly in the time series and 
+    """Adds data around origin point that is not directly in the time series and
     needs interpolation"""
     nr_iterations_traj = trajectory_dict["nr_iterations_traj"]
     time_origin = np.datetime64(trajectory_dict["datetime_origin"])
@@ -1233,7 +1233,9 @@ def dummy_trajectory(mf_list, trajectory_dict):
         trajectory_dict["forward_duration_hours"], "h"
     )
     mf_extract_time = []
-    # Only merge time arrays for now
+    # Only merge time arrays for in order to fill trajectory
+    # Note: may want to add some checks here so time is the same
+    # between files
     for mf_list_element in mf_list:
         time_start_mf = np.max(
             mf_list_element["time"].where(mf_list_element["time"] <= start_date)
@@ -1323,7 +1325,6 @@ def dummy_forcings(mf_list, forcings_dict):
         lats_lons_dict.update(forcings_dict)
         out_levels = np.arange(0, 10000.0, 40.0)
         ds_smaller = era5_subset_by_time(mf_list, this_time, lats_lons_dict)
-        # Save intermediate results
         add_heights_and_pressures(ds_smaller)
         add_auxiliary_variables(
             ds_smaller, ["theta", "rho", "w_pressure_corr", "w_corr"], lats_lons_dict
@@ -1385,14 +1386,14 @@ def main():
         "backward_duration_hours": 3,
         "forward_duration_hours": 1,
         "nr_iterations_traj": 10,
-        #"velocity_strategy": "lower_troposphere_humidity_weighted",
+        # "velocity_strategy": "lower_troposphere_humidity_weighted",
         # "velocity_strategy": "prescribed_velocity",
         # "u_traj" : -6.0,
         # "v_traj" : -0.25,
         "velocity_strategy": "velocity_at_height",
         "velocity_height": 500.0,
-        #"pres_cutoff_start": 60000.0,
-        #"pres_cutoff_end": 50000.0,
+        # "pres_cutoff_start": 60000.0,
+        # "pres_cutoff_end": 50000.0,
     }
     dummy_trajectory(ds_list, dummy_trajectory_dict)
     dummy_forcings_dict = {

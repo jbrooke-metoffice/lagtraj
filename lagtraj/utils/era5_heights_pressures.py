@@ -515,7 +515,8 @@ def era5_interp_column_by_time(
             mf_extract.append(mf_interp)
     ds_at_location = xr.merge(mf_extract)
     ds_at_location.load()
-    del mf_extract, mf_interp
+    mf_interp.close()
+    del mf_extract
     return ds_at_location
 
 
@@ -558,7 +559,8 @@ def era5_interp_column_interp_time(
             mf_extract.append(mf_interp)
     ds_at_location = xr.merge(mf_extract)
     ds_at_location.load()
-    del mf_extract, mf_interp
+    mf_interp.close()
+    del mf_extract
     return ds_at_location
 
 
@@ -1349,6 +1351,11 @@ def dummy_forcings(mf_list, forcings_dict):
         ds_time_step.reset_coords(["latitude", "longitude"])
         ds_time_height.close()
         ds_out = xr.combine_by_coords((ds_out, ds_time_step))
+        ds_gradients.close()
+        ds_era5_mean.close()
+        ds_profiles.close()
+        ds_tendencies.close()
+        ds_time_step.close()
         ds_out.to_netcdf("ds_along_traj.nc")
     # Add trajectory information
     ds_out = xr.combine_by_coords((ds_out, ds_traj))

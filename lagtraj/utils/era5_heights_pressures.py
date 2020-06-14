@@ -438,8 +438,8 @@ def era5_on_pressure_levels(ds_model_levels, pressures_array):
         p_h = ds_model_levels["p_h"][time_index, :, :, :].values
         # Points over sea that have height above zero but below 5m
         # Here, profiles are extended to 0m
-        lower_extrapolation = ds_model_levels["p_h"][time_index, 0, :, :].values
-        upper_extrapolation = ds_model_levels["p_f"][time_index, -1, :, :].values
+        lower_extrapolation = ds_model_levels["p_f"][time_index, 0, :, :].values
+        upper_extrapolation = ds_model_levels["p_h"][time_index, -1, :, :].values
         for variable in ds_model_levels.variables:
             if np.shape(ds_model_levels[variable]) == shape_m_levels:
                 if variable in ["height_h", "p_h"]:

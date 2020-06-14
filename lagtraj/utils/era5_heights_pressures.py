@@ -139,7 +139,9 @@ def steffen_3d(
     input_levels,
     output_level_array,
     lower_extrapolation_surface,
+    upper_extrapolation_surface,
     lower_extrapolation_with_gradient=False,
+    upper_extrapolation_with_gradient=False,
 ):
     """ Performs Steffen interpolation on each individual column.
     Steffen, M. (1990). A simple method for monotonic interpolation in
@@ -149,7 +151,7 @@ def steffen_3d(
     i_max = input_data.shape[2]
     k_max_output = output_level_array.shape[0]
     k_max_minus = k_max - 1
-    linear_slope = np.empty((k_max, j_max, i_max))
+    linear_slope = np.empty((k_max))
     output_data = np.empty((k_max_output, j_max, i_max))
     for i in range(i_max):
         for j in range(j_max):
@@ -167,11 +169,11 @@ def steffen_3d(
                 1 + delta_lower / (delta_lower + delta_upper)
             ) - slope_upper * delta_lower / (delta_lower + delta_upper)
             if weighted_slope * slope_lower <= 0.0:
-                linear_slope[0, j, i] = 0.0
+                linear_slope[0] = 0.0
             elif np.abs(weighted_slope) > 2 * np.abs(slope_lower):
-                linear_slope[0, j, i] = 2.0 * slope_lower
+                linear_slope[0] = 2.0 * slope_lower
             else:
-                linear_slope[0, j, i] = weighted_slope
+                linear_slope[0] = weighted_slope
 
             # intermediate points
             for k in range(1, k_max_minus):
@@ -188,17 +190,17 @@ def steffen_3d(
                 ) / (delta_lower + delta_upper)
 
                 if slope_lower * slope_upper <= 0.0:
-                    linear_slope[k, j, i] = 0.0
+                    linear_slope[k] = 0.0
                 elif np.abs(weighted_slope) > 2.0 * np.abs(slope_lower):
-                    linear_slope[k, j, i] = np.copysign(2.0, slope_lower) * min(
+                    linear_slope[k] = np.copysign(2.0, slope_lower) * min(
                         np.abs(slope_lower), np.abs(slope_upper)
                     )
                 elif np.abs(weighted_slope) > 2.0 * np.abs(slope_upper):
-                    linear_slope[k, j, i] = np.copysign(2.0, slope_lower) * min(
+                    linear_slope[k] = np.copysign(2.0, slope_lower) * min(
                         np.abs(slope_lower), np.abs(slope_upper)
                     )
                 else:
-                    linear_slope[k, j, i] = weighted_slope
+                    linear_slope[k] = weighted_slope
 
             # last point
             delta_lower = (
@@ -218,11 +220,11 @@ def steffen_3d(
                 1 + delta_upper / (delta_upper + delta_lower)
             ) - slope_lower * delta_upper / (delta_upper + delta_lower)
             if weighted_slope * slope_upper <= 0.0:
-                linear_slope[k_max_minus, j, i] = 0.0
+                linear_slope[k_max_minus] = 0.0
             elif np.abs(weighted_slope) > 2.0 * np.abs(slope_upper):
-                linear_slope[k_max_minus, j, i] = 2.0 * slope_upper
+                linear_slope[k_max_minus] = 2.0 * slope_upper
             else:
-                linear_slope[k_max_minus, j, i] = weighted_slope
+                linear_slope[k_max_minus] = weighted_slope
 
             # loop over output points
             k_temp = 0
@@ -236,17 +238,13 @@ def steffen_3d(
                     k_low = k_high - 1
                     delta = input_levels[k_high, j, i] - input_levels[k_low, j, i]
                     slope = (input_data[k_high, j, i] - input_data[k_low, j, i]) / delta
-                    a = (
-                        linear_slope[k_low, j, i]
-                        + linear_slope[k_high, j, i]
-                        - 2 * slope
-                    ) / (delta * delta)
+                    a = (linear_slope[k_low] + linear_slope[k_high] - 2 * slope) / (
+                        delta * delta
+                    )
                     b = (
-                        3 * slope
-                        - 2 * linear_slope[k_low, j, i]
-                        - linear_slope[k_high, j, i]
+                        3 * slope - 2 * linear_slope[k_low] - linear_slope[k_high]
                     ) / delta
-                    c = linear_slope[k_low, j, i]
+                    c = linear_slope[k_low]
                     d = input_data[k_low, j, i]
                     t_1 = output_level_array[k_out] - input_levels[k_low, j, i]
                     t_2 = t_1 * t_1
@@ -257,10 +255,21 @@ def steffen_3d(
                 ):
                     if lower_extrapolation_with_gradient:
                         output_data[k_out, j, i] = input_data[0, j, i] + linear_slope[
-                            0, j, i
+                            0
                         ] * (output_level_array[k_out] - input_levels[0, j, i])
                     else:
                         output_data[k_out, j, i] = input_data[0, j, i]
+                elif (k_temp == k_max) and (
+                    output_level_array[k_out] <= upper_extrapolation_surface[j, i]
+                ):
+                    if upper_extrapolation_with_gradient:
+                        output_data[k_out, j, i] = input_data[
+                            k_max - 1, j, i
+                        ] + linear_slope[k_max - 1] * (
+                            output_level_array[k_out] - input_levels[k_max - 1, j, i]
+                        )
+                    else:
+                        output_data[k_out, j, i] = input_data[k_max - 1, j, i]
                 else:
                     output_data[k_out, j, i] = np.nan
     return output_data
@@ -356,6 +365,7 @@ def era5_on_height_levels(ds_model_levels, heights_array):
         lower_extrapolation_with_mask = xr.where(
             sea_mask, -1.0e-6, ds_model_levels["height_h"][time_index, -1, :, :]
         ).values
+        upper_extrapolation = ds_model_levels["height_f"][time_index, 0, :, :].values
         for variable in ds_model_levels.variables:
             if np.shape(ds_model_levels[variable]) == shape_m_levels:
                 if variable in ["height_h", "p_h"]:
@@ -371,7 +381,9 @@ def era5_on_height_levels(ds_model_levels, heights_array):
                         h_inverse,
                         heights_array,
                         lower_extrapolation_with_mask,
+                        upper_extrapolation,
                         lower_extrapolation_with_gradient=True,
+                        upper_extrapolation_with_gradient=True,
                     )
                 else:
                     ds_height_levels[variable][time_index] = steffen_3d(
@@ -379,8 +391,81 @@ def era5_on_height_levels(ds_model_levels, heights_array):
                         h_inverse,
                         heights_array,
                         lower_extrapolation_with_mask,
+                        upper_extrapolation,
                     )
     return ds_height_levels
+
+
+def era5_on_pressure_levels(ds_model_levels, pressures_array):
+    """Converts ERA5 model level data to data on height levels using
+    Steffen interpolation"""
+    if isinstance(pressures_array[0], numbers.Integral):
+        raise Exception("Heights need to be floating numbers, rather than integers")
+    pressures_coord = {
+        "lev": ("lev", pressures_array, {"long_name": "pressure", "units": "Pa"},)
+    }
+    ds_pressure_levels = xr.Dataset(
+        coords={
+            "time": ds_model_levels.time,
+            **pressures_coord,
+            "latitude": ds_model_levels.latitude,
+            "longitude": ds_model_levels.longitude,
+        }
+    )
+    time_steps = len(ds_model_levels["p_f"])
+    shape_m_levels = np.shape(ds_model_levels["p_f"])
+    shape_p_levels = (shape_m_levels[0],) + (len(pressures_array),) + shape_m_levels[2:]
+    for variable in ds_model_levels.variables:
+        if ds_model_levels[variable].dims == (
+            "time",
+            "level",
+            "latitude",
+            "longitude",
+        ):
+            ds_pressure_levels[variable] = (
+                ("time", "lev", "latitude", "longitude"),
+                np.empty(shape_p_levels),
+                ds_model_levels[variable].attrs,
+            )
+        elif "level" not in ds_model_levels[variable].dims:
+            ds_pressure_levels[variable] = (
+                ds_model_levels[variable].dims,
+                ds_model_levels[variable],
+                ds_model_levels[variable].attrs,
+            )
+    for time_index in range(time_steps):
+        p_f = ds_model_levels["p_f"][time_index, :, :, :].values
+        p_h = ds_model_levels["p_h"][time_index, :, :, :].values
+        # Points over sea that have height above zero but below 5m
+        # Here, profiles are extended to 0m
+        lower_extrapolation = ds_model_levels["p_h"][time_index, 0, :, :].values
+        upper_extrapolation = ds_model_levels["p_f"][time_index, -1, :, :].values
+        for variable in ds_model_levels.variables:
+            if np.shape(ds_model_levels[variable]) == shape_m_levels:
+                if variable in ["height_h", "p_h"]:
+                    p_this_var = p_h
+                else:
+                    p_this_var = p_f
+                field_m_levels = ds_model_levels[variable][time_index, :, :, :].values
+                if variable in ["p_h", "p_f", "height_h", "height_f"]:
+                    ds_pressure_levels[variable][time_index] = steffen_3d(
+                        field_m_levels,
+                        p_this_var,
+                        pressures_array,
+                        lower_extrapolation,
+                        upper_extrapolation,
+                        lower_extrapolation_with_gradient=True,
+                        upper_extrapolation_with_gradient=True,
+                    )
+                else:
+                    ds_pressure_levels[variable][time_index] = steffen_3d(
+                        field_m_levels,
+                        p_this_var,
+                        pressures_array,
+                        lower_extrapolation,
+                        upper_extrapolation,
+                    )
+    return ds_pressure_levels
 
 
 def add_auxiliary_variable(ds_to_expand, var, settings_dictionary):
@@ -979,12 +1064,22 @@ def velocity_at_height(ds_for_vel, trajectory_dict):
     return np.mean(ds_on_height_level["u"]), np.mean(ds_on_height_level["v"])
 
 
+def velocity_at_pressure(ds_for_vel, trajectory_dict):
+    """Velocity at one pressure: needs more work"""
+    single_pressure_level = np.array([trajectory_dict["velocity_pressure"]])
+    ds_on_pressure_level = era5_on_pressure_levels(ds_for_vel, single_pressure_level)
+    # For a single colum, data dimensions are all 1
+    return np.mean(ds_on_pressure_level["u"]), np.mean(ds_on_pressure_level["v"])
+
+
 def get_velocity_from_strategy(ds_column, trajectory_dict):
     """Wrapper routine, determine velocity according to strategy"""
     if trajectory_dict["velocity_strategy"] == "lower_troposphere_humidity_weighted":
         u_traj, v_traj = weighted_velocity(ds_column, trajectory_dict)
     elif trajectory_dict["velocity_strategy"] == "velocity_at_height":
         u_traj, v_traj = velocity_at_height(ds_column, trajectory_dict)
+    elif trajectory_dict["velocity_strategy"] == "velocity_at_pressure":
+        u_traj, v_traj = velocity_at_pressure(ds_column, trajectory_dict)
     else:
         raise NotImplementedError("Trajectory velocity strategy not implemented")
     return u_traj, v_traj
@@ -1360,8 +1455,8 @@ def dummy_forcings(mf_list, forcings_dict):
     # Add trajectory information
     ds_out = xr.combine_by_coords((ds_out, ds_traj))
     fix_units(ds_out)
-    ds_out['latitude'].attrs={"long_name": "latitude", "units": "degrees_north"}
-    ds_out['longitude'].attrs={"long_name": "longitude", "units": "degrees_east"}
+    ds_out["latitude"].attrs = {"long_name": "latitude", "units": "degrees_north"}
+    ds_out["longitude"].attrs = {"long_name": "longitude", "units": "degrees_east"}
     add_globals_attrs_to_ds(ds_out)
     add_dict_to_global_attrs(ds_out, forcings_dict)
     ds_out.to_netcdf("ds_along_traj.nc")
@@ -1399,8 +1494,8 @@ def main():
         # "velocity_strategy": "prescribed_velocity",
         # "u_traj" : -6.0,
         # "v_traj" : -0.25,
-        "velocity_strategy": "velocity_at_height",
-        "velocity_height": 500.0,
+        "velocity_strategy": "velocity_at_pressure",
+        "velocity_pressure": 95000.0,
         # "pres_cutoff_start": 60000.0,
         # "pres_cutoff_end": 50000.0,
     }

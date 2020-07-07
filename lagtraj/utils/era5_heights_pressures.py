@@ -9,7 +9,10 @@ ERA5 utilities that can
 - Add auxiliary variables
 
 TODO
-- More focings/variable (e.g. humidity forcings and large-scale tendencies).
+- Use half-levels as a coordinate for the relevant variables in RACMO.
+- Combine soil layers for RACMO
+- Discuss exact definitions of specific humidity
+- More generic levels on trajectory
 - Use of local versus averaged velocity in trajectories
 - Distinguish box sizes for averages, gradients and trajectory calculations.
 - Implement selection as circle with radius, rather than box?
@@ -35,6 +38,7 @@ import datetime
 import numpy as np
 import pandas as pd
 import xarray as xr
+from conversions import racmo_from_era5, hightune_from_era5
 
 # Optional numba dependency
 try:
@@ -64,6 +68,11 @@ r_earth = 6371000.0
 r_earth_inv = 1.0 / r_earth
 pi = np.pi
 omega = 7.2921150e-5
+rlv = 2.5008e6
+rlv_over_cp = rlv / cp
+rls = 2.8345e6
+rls_over_cp = rls / cp
+
 
 # PARAMETERS OF CODE
 longitude_tolerance = 0.001  # (longitude alignment tolerance: about 100m)
@@ -468,6 +477,51 @@ def era5_on_pressure_levels(ds_model_levels, pressures_array):
     return ds_pressure_levels
 
 
+def theta_l_extensive(tt, pp, qt, ql, qi):
+    cpd = 1005.7  # specific heat at constant pressure (dry air).
+    cpv = 1870.0  # specific heat at constant pressure (vapor).
+    cpl = 4190.0  # specific heat at constant pressure (liquid).
+    cpi = 2106.0  # specific heat at constant pressure (ice).
+    srd = 6775.0  # specific entropy at triple point (dry air).
+    srv = 10320.0  # specific entropy at triple point (vapor).
+    srl = 3517.0  # specific entropy at triple point (liquid).
+    sri = 2296.0  # specific entropy at triple point (ice).
+    rd = 287.04  # gas constant for dry air.
+    rv = 461.5  # gas constant for water vapor
+    tref = 273.15  # reference temperature
+    pref = 100000.0  # reference pressure
+    theta_l = xr.where(
+        ql + qi < 0.999 * qt,
+        (
+            tt
+            * (tt / tref)
+            ** (
+                qt * (cpv - cpd) / cpd + ql * (cpl - cpv) / cpd + qi * (cpi - cpv) / cpd
+            )
+            * (pp / (pref * (1 + ((qt - ql - qi) * rv) / ((1 - qt) * rd))))
+            ** (-(1 - qt) * rd / cpd)
+            * (pp / (pref * (1 + ((1 - qt) * rd) / ((qt - ql - qi) * rv))))
+            ** (-(qt - ql - qi) * rv / cpd)
+            * np.exp(-ql * (srv - srl) / cpd - qi * (srv - sri) / cpd)
+            * (1.0 / (1.0 + (qt * rv) / ((1.0 - qt) * rd))) ** ((1.0 - qt) * rd / cpd)
+            * (1.0 / (1.0 + ((1.0 - qt) * rd) / (qt * rv))) ** ((qt) * rv / cpd)
+        ),
+        (
+            tt
+            * (tt / tref)
+            ** (
+                qt * (cpv - cpd) / cpd + ql * (cpl - cpv) / cpd + qi * (cpi - cpv) / cpd
+            )
+            * (pp / (pref * (1 + ((qt - ql - qi) * rv) / ((1 - qt) * rd))))
+            ** (-(1 - qt) * rd / cpd)
+            * np.exp(-ql * (srv - srl) / cpd - qi * (srv - sri) / cpd)
+            * (1.0 / (1.0 + (qt * rv) / ((1.0 - qt) * rd))) ** ((1.0 - qt) * rd / cpd)
+            * (1.0 / (1.0 + ((1.0 - qt) * rd) / (qt * rv))) ** ((qt) * rv / cpd)
+        ),
+    )
+    return theta_l
+
+
 def add_auxiliary_variable(ds_to_expand, var, settings_dictionary):
     """Adds auxiliary variables to arrays. Alternatively, the equations
     could be separated out to another utility I think this may be
@@ -498,6 +552,57 @@ def add_auxiliary_variable(ds_to_expand, var, settings_dictionary):
         attr_dict = {"units": "m s**-1", "long_name": "Corrected vertical velocity"}
         ds_to_expand[var] = -ds_to_expand["w_pressure_corr"] / (
             rg * ds_to_expand["rho"]
+        )
+    elif var == "t_l":
+        attr_dict = {"units": "K", "long_name": "Liquid/ice water temperature"}
+        ds_to_expand[var] = (
+            ds_to_expand["t"]
+            - rlv_over_cp * (ds_to_expand["clwc"])
+            - rls_over_cp * (ds_to_expand["ciwc"])
+        )
+    elif var == "q_t":
+        attr_dict = {
+            "long_name": "Specific total water content (no hydrometeors)",
+            "units": "kg kg**-1",
+        }
+        ds_to_expand[var] = (
+            ds_to_expand["q"] + ds_to_expand["clwc"] + ds_to_expand["ciwc"]
+        )
+    elif var == "q_t_hydromet":
+        attr_dict = {
+            "long_name": "Specific total water content (with hydrometeors)",
+            "units": "kg kg**-1",
+        }
+        ds_to_expand[var] = (
+            ds_to_expand["q"]
+            + ds_to_expand["clwc"]
+            + ds_to_expand["ciwc"]
+            + ds_to_expand["crwc"]
+            + ds_to_expand["cswc"]
+        )
+    elif var == "r_t":
+        attr_dict = {"long_name": "Total water mixing ratio", "units": "kg kg**-1"}
+        ds_to_expand[var] = ds_to_expand["q_t"] / (1.0 - ds_to_expand["q_t_hydromet"])
+    elif var == "r_v":
+        attr_dict = {"long_name": "Water vapour mixing ratio", "units": "kg kg**-1"}
+        ds_to_expand[var] = ds_to_expand["q"] / (1.0 - ds_to_expand["q_t_hydromet"])
+    elif var == "r_l":
+        attr_dict = {
+            "long_name": "Cloud liquid water mixing ratio",
+            "units": "kg kg**-1",
+        }
+        ds_to_expand[var] = ds_to_expand["clwc"] / (1.0 - ds_to_expand["q_t_hydromet"])
+    elif var == "r_i":
+        attr_dict = {"long_name": "Cloud ice mixing ratio", "units": "kg kg**-1"}
+        ds_to_expand[var] = ds_to_expand["ciwc"] / (1.0 - ds_to_expand["q_t_hydromet"])
+    elif var == "theta_l":
+        attr_dict = {"long_name": "Liquid water potential temperature", "units": "K"}
+        ds_to_expand[var] = theta_l_extensive(
+            ds_to_expand["t"],
+            ds_to_expand["p_f"],
+            ds_to_expand["q_t"],
+            ds_to_expand["clwc"],
+            ds_to_expand["ciwc"],
         )
     else:
         raise NotImplementedError("Variable not implemented")
@@ -903,9 +1008,9 @@ def era5_adv_tendencies(ds_profile, list_of_vars, dictionary):
     ds_out = xr.Dataset(coords={"time": ds_profile.time, "lev": ds_profile.lev})
     for variable in list_of_vars:
         tendency_array = (
-            -(ds_profile["u"].values - dictionary["u_traj"])
+            -(ds_profile["u_local"].values - dictionary["u_traj"])
             * ds_profile["d" + variable + "dx"].values
-            - (ds_profile["v"].values - dictionary["v_traj"])
+            - (ds_profile["v_local"].values - dictionary["v_traj"])
             * ds_profile["d" + variable + "dy"].values
         )
         ds_out[variable + "_advtend"] = (
@@ -1110,6 +1215,7 @@ def fix_units(ds_to_fix):
         "(0 - 1)": "1",
         "m of water equivalent": "m",
         "~": "1",
+        "(0 - 1) s**-1": "s**-1",
     }
     for variable in ds_to_fix.variables:
         if hasattr(ds_to_fix[variable], "units"):
@@ -1354,12 +1460,12 @@ def dummy_trajectory(mf_list, trajectory_dict):
     ds_traj["lat_traj"] = (
         ("time"),
         np.empty((time_len)),
-        {"long_name": "trajectory latitude", "units": "degrees_east"},
+        {"long_name": "trajectory latitude", "units": "degrees_north"},
     )
     ds_traj["lon_traj"] = (
         ("time"),
         np.empty((time_len)),
-        {"long_name": "trajectory longitude", "units": "degrees_north"},
+        {"long_name": "trajectory longitude", "units": "degrees_east"},
     )
     ds_traj["u_traj"] = (
         ("time"),
@@ -1424,22 +1530,74 @@ def dummy_forcings(mf_list, forcings_dict):
         ds_smaller = era5_subset_by_time(mf_list, this_time, lats_lons_dict)
         add_heights_and_pressures(ds_smaller)
         add_auxiliary_variables(
-            ds_smaller, ["theta", "rho", "w_pressure_corr", "w_corr"], lats_lons_dict
+            ds_smaller,
+            [
+                "theta",
+                "rho",
+                "w_pressure_corr",
+                "w_corr",
+                "t_l",
+                "q_t",
+                "q_t_hydromet",
+                "r_t",
+                "r_v",
+                "r_l",
+                "r_i",
+                "theta_l",
+            ],
+            lats_lons_dict,
         )
         ds_time_height = era5_on_height_levels(ds_smaller, out_levels)
         ds_smaller.close()
         era5_add_lat_lon_meshgrid(ds_time_height)
         ds_profiles = era5_single_point(ds_time_height, lats_lons_dict)
-        ds_era5_mean = era5_box_mean(ds_time_height, lats_lons_dict)
-        for variable in ds_era5_mean.variables:
+        ds_era5_complete = era5_box_mean(ds_time_height, lats_lons_dict)
+        for variable in ds_era5_complete.variables:
             if variable not in ["time", "lev"]:
-                ds_profiles[variable + "_mean"] = ds_era5_mean[variable]
+                ds_era5_complete[variable + "_local"] = ds_profiles[variable]
         ds_gradients = era5_gradients(
-            ds_time_height, ["u", "v", "p_f", "theta", "q"], lats_lons_dict
+            ds_time_height,
+            [
+                "u",
+                "v",
+                "theta",
+                "q",
+                "clwc",
+                "ciwc",
+                "t",
+                "p_f",
+                "t_l",
+                "cc",
+                "q_t",
+                "r_t",
+                "r_v",
+                "r_l",
+                "r_i",
+                "theta_l",
+            ],
+            lats_lons_dict,
         )
-        ds_time_step = xr.merge((ds_gradients, ds_profiles))
+        ds_time_step = xr.merge((ds_gradients, ds_era5_complete))
         ds_tendencies = era5_adv_tendencies(
-            ds_time_step, ["u", "v", "theta", "q"], lats_lons_dict
+            ds_time_step,
+            [
+                "u",
+                "v",
+                "theta",
+                "q",
+                "clwc",
+                "ciwc",
+                "t",
+                "t_l",
+                "cc",
+                "q_t",
+                "r_t",
+                "r_v",
+                "r_l",
+                "r_i",
+                "theta_l",
+            ],
+            lats_lons_dict,
         )
         ds_time_step = xr.merge((ds_time_step, ds_tendencies))
         add_geowind_around_centre(ds_time_step, lats_lons_dict)
@@ -1447,13 +1605,14 @@ def dummy_forcings(mf_list, forcings_dict):
         ds_time_height.close()
         ds_out = xr.combine_by_coords((ds_out, ds_time_step))
         ds_gradients.close()
-        ds_era5_mean.close()
+        ds_era5_complete.close()
         ds_profiles.close()
         ds_tendencies.close()
         ds_time_step.close()
         ds_out.to_netcdf("ds_along_traj.nc")
     # Add trajectory information
     ds_out = xr.combine_by_coords((ds_out, ds_traj))
+    ds_out.update(ds_traj.attrs)
     fix_units(ds_out)
     ds_out["latitude"].attrs = {"long_name": "latitude", "units": "degrees_north"}
     ds_out["longitude"].attrs = {"long_name": "longitude", "units": "degrees_east"}
@@ -1464,10 +1623,10 @@ def dummy_forcings(mf_list, forcings_dict):
 
 def main():
     """Dummy implementations for trajectory tool"""
-    files_model_an = "output_domains/model_an_*_eurec4a_circle_eul_domain.nc"
-    files_single_an = "output_domains/single_an_*_eurec4a_circle_eul_domain.nc"
-    files_model_fc = "output_domains/model_fc_*_eurec4a_circle_eul_domain.nc"
-    files_single_fc = "output_domains/single_fc_*_eurec4a_circle_eul_domain.nc"
+    files_model_an = "output_domains/an_model*.nc"
+    files_single_an = "output_domains/an_single*.nc"
+    files_model_fc = "output_domains/fc_model*.nc"
+    files_single_fc = "output_domains/fc_single*.nc"
     ds_model_an = xr.open_mfdataset(
         files_model_an, combine="nested", concat_dim="time", chunks={"time": 1}
     )
@@ -1509,6 +1668,12 @@ def main():
         "w_cutoff_end": 40000.0,
     }
     dummy_forcings(ds_list, dummy_forcings_dict)
+    dummy_conversion_dict = {
+        "nudging_time": "3600.",
+        "input_file": "ds_along_traj.nc",
+    }
+    racmo_from_era5(dummy_conversion_dict)
+    hightune_from_era5(dummy_conversion_dict)
 
 
 if __name__ == "__main__":

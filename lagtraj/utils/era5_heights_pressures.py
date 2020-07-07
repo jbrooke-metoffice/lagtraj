@@ -1612,7 +1612,7 @@ def dummy_forcings(mf_list, forcings_dict):
         ds_out.to_netcdf("ds_along_traj.nc")
     # Add trajectory information
     ds_out = xr.combine_by_coords((ds_out, ds_traj))
-    ds_out.update(ds_traj.attrs)
+    add_dict_to_global_attrs(ds_out, ds_traj.attrs)
     fix_units(ds_out)
     ds_out["latitude"].attrs = {"long_name": "latitude", "units": "degrees_north"}
     ds_out["longitude"].attrs = {"long_name": "longitude", "units": "degrees_east"}

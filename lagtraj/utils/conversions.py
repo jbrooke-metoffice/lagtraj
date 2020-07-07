@@ -1,9 +1,11 @@
 """Conversions module"""
 import numpy as np
 import xarray as xr
+import datetime
 
 rg = 9.80665
 cp = 1004.0
+rlv = 2.5008e6
 
 # Optional numba dependency
 try:
@@ -19,6 +21,15 @@ except ImportError:
     print("Running without numba")
 
 
+def add_dict_to_global_attrs(ds_to_add_to, dictionary):
+    """Adds global attributes to datasets"""
+    for attribute in dictionary:
+        ds_to_add_to.attrs[attribute] = dictionary[attribute]
+
+
+# This can probably be replaced by the generic
+# No extrapolation is performed
+# Time axis present, but not lat, lon
 @njit
 def steffen_1d_no_ep_time(
     input_data, input_levels, output_level_array,
@@ -133,11 +144,9 @@ def steffen_1d_no_ep_time(
     return output_data
 
 
-def delta_central_edges(a_in):
+def central_estimate(a_in):
     """take a one-sided difference at the edges, and a central difference elsewhere"""
-    return np.concatenate(
-        ([a_in[1] - a_in[0]], 0.5 * (a_in[2:] - a_in[:-2]), [a_in[-1] - a_in[-2]])
-    )
+    return np.concatenate(([a_in[0]], 0.5 * (a_in[1:-1] + a_in[2:]), [a_in[-1]]))
 
 
 def era5_units_change(da_era5, replacement_dictionary):
@@ -278,18 +287,14 @@ def racmo_from_era5(conversion_dict):
     # Apply correction to t_skin (see output files)
     ds_racmo["t_skin"] = ds_era5["stl1"] + 1.0
     ds_racmo["t_skin"].assign_attrs(racmo_variables["t_skin"])
-    # Surface fluxes: obtain from time integrals in ERA data
-    time_s = ((ds_era5["time"] - ds_era5["time"][0]) / np.timedelta64(1, "s")).values
-    d_time = delta_central_edges(time_s)
-    d_sens_flx = delta_central_edges(ds_era5["sshf"].values)
-    sfc_sens_flx = d_sens_flx / d_time
+    # Surface fluxes: obtain from time mean in ERA data, do not change sign
+    sfc_sens_flx = central_estimate(ds_era5["msshf"].values)
     ds_racmo["sfc_sens_flx"] = (
         ("time"),
         sfc_sens_flx,
         racmo_variables["sfc_sens_flx"],
     )
-    d_lat_flx = delta_central_edges(ds_era5["slhf"].values)
-    sfc_lat_flx = d_lat_flx / d_time
+    sfc_lat_flx = central_estimate(ds_era5["mslhf"].values)
     ds_racmo["sfc_lat_flx"] = (
         ("time"),
         sfc_lat_flx,
@@ -314,6 +319,23 @@ def racmo_from_era5(conversion_dict):
     for var in racmo_variables:
         if var not in ds_racmo:
             print(var + " is missing in the RACMO formatted output")
+    # Needs improvement
+    racmo_dict = {
+        "campaign": "NEEDS ADDING",
+        "flight": "NEEDS ADDING",
+        "date": ds_era5.datetime_origin,
+        "source": "ERA5",
+        "source_domain": "NEEDS ADDING",
+        "source_grid": "grid0.1x0.1",
+        "source_latsamp": ds_era5.averaging_width,
+        "source_lonsamp": ds_era5.averaging_width,
+        "creator": "https://github.com/EUREC4A-UK/lagtraj",
+        "created": datetime.datetime.now().isoformat(),
+        "wilting_point": 0.1715,
+        "field_capacity": 0.32275,
+        "t_skin_correct": "Skin temperature has been corrected by 1.000000. Motivation: value from IFS is actually the open SST, which is lower than the skin temperature.",
+    }
+    add_dict_to_global_attrs(ds_racmo, racmo_dict)
     ds_racmo.to_netcdf("ds_racmo.nc")
 
 
@@ -639,7 +661,7 @@ def hightune_from_era5(conversion_dict):
             raise Exception(except_str)
         ds_hightune[variable] = da_era5
     # TKE, set to zero
-    ds_hightune["tke"] = 0.0*(ds_era5["u"]*ds_era5["u"])
+    ds_hightune["tke"] = 0.0 * (ds_era5["u"] * ds_era5["u"])
     ds_hightune["tke"].assign_attrs(hightune_variables["tke"])
     # Heat roughness, derive from "flsr" variable
     ds_hightune["z0h"] = np.exp(ds_era5["flsr"])
@@ -647,33 +669,87 @@ def hightune_from_era5(conversion_dict):
     # Need to check t_skin correction
     ds_hightune["ts"] = ds_era5["stl1"] + 1.0
     ds_hightune["ts"].assign_attrs(hightune_variables["ts"])
-    # Surface fluxes: obtain from time integrals in ERA data
-    time_s = ((ds_era5["time"] - ds_era5["time"][0]) / np.timedelta64(1, "s")).values
-    d_time = delta_central_edges(time_s)
-    d_sens_flx = delta_central_edges(ds_era5["sshf"].values)
-    sfc_sens_flx = d_sens_flx / d_time
+    # Surface fluxes: obtain from time mean in ERA data, change sign for hightune!
+    sfc_sens_flx = -central_estimate(ds_era5["msshf"].values)
     ds_hightune["sfc_sens_flx"] = (
         ("time"),
         sfc_sens_flx,
         hightune_variables["sfc_sens_flx"],
     )
-    d_lat_flx = delta_central_edges(ds_era5["slhf"].values)
-    sfc_lat_flx = d_lat_flx / d_time
+    sfc_lat_flx = -central_estimate(ds_era5["mslhf"].values)
     ds_hightune["sfc_lat_flx"] = (
         ("time"),
         sfc_lat_flx,
         hightune_variables["sfc_lat_flx"],
     )
-    wpthetap=(sfc_sens_flx/(cp*ds_era5["rho"].sel(lev=0.0)))*(ds_era5["theta"].sel(lev=0.0)/ds_era5["t"].sel(lev=0.0))
+    wpthetap = (sfc_sens_flx / (cp * ds_era5["rho"].sel(lev=0.0))) * (
+        ds_era5["theta"].sel(lev=0.0) / ds_era5["t"].sel(lev=0.0)
+    )
     ds_hightune["wpthetap"] = (
         ("time"),
-        sfc_lat_flx,
+        wpthetap,
         hightune_variables["wpthetap"],
+    )
+    wpqvp = sfc_lat_flx / (rlv * ds_era5["rho"].sel(lev=0.0))
+    ds_hightune["wpqvp"] = (
+        ("time"),
+        wpqvp,
+        hightune_variables["wpqvp"],
+    )
+    wpqtp = wpqvp
+    ds_hightune["wpqtp"] = (
+        ("time"),
+        wpqtp,
+        hightune_variables["wpqtp"],
+    )
+    # This should be the same for all variables
+    moisture_ratio = ds_era5["r_t"].sel(lev=0.0) / ds_era5["q_t"].sel(lev=0.0)
+    wprvp = wpqvp * moisture_ratio
+    ds_hightune["wprvp"] = (
+        ("time"),
+        wprvp,
+        hightune_variables["wprvp"],
+    )
+    wprtp = wpqtp * moisture_ratio
+    ds_hightune["wprtp"] = (
+        ("time"),
+        sfc_lat_flx,
+        hightune_variables["wprtp"],
     )
     # Final checks: are all variables present?
     for var in hightune_variables:
         if var not in ds_hightune:
             print(var + " is missing in the hightune formatted output")
+    # Needs improvement
+    hightune_dictionary = {
+        "Conventions": "CF-1.0",
+        "comment": "Forcing and initial conditions for Lagrangian case",
+        "reference": "NEEDS ADDING",
+        "author": "NEEDS ADDING",
+        "modifications": "NEEDS ADDING",
+        "case": "NEEDS ADDING",
+        "script": "https://github.com/EUREC4A-UK/lagtraj",
+        "startDate": ds_hightune["time"][0],
+        "endDate": ds_hightune["time"][-1],
+        "tadv": 0,
+        "tadvh": 1,
+        "tadvv": 0,
+        "rad_temp": 1,
+        "qvadv": 0,
+        "qvadvh": 1,
+        "qvadvv": 0,
+        "forc_omega": 0,
+        "forc_w": 1,
+        "forc_geo": 1,
+        "nudging_u": 0,
+        "nudging_v": 0,
+        "nudging_t": 0,
+        "nudging_q": 0,
+        "zorog": 0.0,
+        "surfaceType": "ocean",
+        "surfaceForcing": "ts",
+        "surfaceForcingWind": "z0_lagtraj",
+    }
     ds_hightune.to_netcdf("ds_hightune.nc")
 
 
@@ -721,7 +797,7 @@ hightune_from_era5_variables = {
     "rt_nudging": "r_t",
     "u_nudging": "u",
     "v_nudging": "v",
-    "z0m" : "fsr"
+    "z0m": "fsr",
 }
 
 

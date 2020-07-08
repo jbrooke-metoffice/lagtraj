@@ -1565,7 +1565,7 @@ def dummy_forcings(mf_list, forcings_dict):
         ds_profiles.close()
         ds_tendencies.close()
         ds_time_step.close()
-        ds_out.to_netcdf("ds_along_traj.nc")
+        ds_out.to_netcdf("ds_native_era5.nc")
     # Add trajectory information
     ds_out = xr.combine_by_coords((ds_out, ds_traj))
     add_dict_to_global_attrs(ds_out, ds_traj.attrs)
@@ -1574,7 +1574,7 @@ def dummy_forcings(mf_list, forcings_dict):
     ds_out["longitude"].attrs = {"long_name": "longitude", "units": "degrees_east"}
     add_globals_attrs_to_ds(ds_out)
     add_dict_to_global_attrs(ds_out, forcings_dict)
-    ds_out.to_netcdf("ds_along_traj.nc")
+    ds_out.to_netcdf("ds_native_era5.nc")
 
 
 def main():
@@ -1626,7 +1626,7 @@ def main():
     dummy_forcings(ds_list, dummy_forcings_dict)
     dummy_conversion_dict = {
         "nudging_time": "3600.",
-        "input_file": "ds_along_traj.nc",
+        "input_file": "ds_native_era5.nc",
     }
     racmo_from_era5(dummy_conversion_dict)
     hightune_from_era5(dummy_conversion_dict)

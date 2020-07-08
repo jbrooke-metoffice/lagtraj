@@ -817,6 +817,15 @@ hightune_from_era5_variables = {
     "u_nudging": "u",
     "v_nudging": "v",
     "z0m": "fsr",
+    "msnswrf": "msnswrf",
+    "msnlwrf": "msnlwrf",
+    "mtnswrf": "mtnswrf",
+    "mtnlwrf": "mtnlwrf",
+    "mtnswrfcs": "mtnswrfcs",
+    "mtnlwrfcs": "mtnlwrfcs",
+    "msnswrfcs": "msnswrfcs",
+    "msnlwrfcs": "msnlwrfcs",
+    "mtdwswrf": "mtdwswrf",
 }
 
 
@@ -929,6 +938,39 @@ hightune_variables = {
     },
     "z0m": {"units": "m", "long_name": "roughness length for momentum"},
     "z0h": {"units": "m", "long_name": "roughness length for heat"},
+    "msnswrf": {
+        "units": "W m-2",
+        "long_name": "Mean surface net short-wave radiation flux",
+    },
+    "msnlwrf": {
+        "units": "W m-2",
+        "long_name": "Mean surface net long-wave radiation flux",
+    },
+    "mtnswrf": {
+        "units": "W m-2",
+        "long_name": "Mean top net short-wave radiation flux",
+    },
+    "mtnlwrf": {"units": "W m-2", "long_name": "Mean top net long-wave radiation flux"},
+    "mtnswrfcs": {
+        "units": "W m-2",
+        "long_name": "Mean top net short-wave radiation flux, clear sky",
+    },
+    "mtnlwrfcs": {
+        "units": "W m-2",
+        "long_name": "Mean top net long-wave radiation flux, clear sky",
+    },
+    "msnswrfcs": {
+        "units": "W m-2",
+        "long_name": "Mean surface net short-wave radiation flux, clear sky",
+    },
+    "msnlwrfcs": {
+        "units": "W m-2",
+        "long_name": "Mean surface net long-wave radiation flux, clear sky",
+    },
+    "mtdwswrf": {
+        "units": "W m-2",
+        "long_name": "Mean top downward short-wave radiation flux",
+    },
 }
 
 
@@ -940,4 +982,5 @@ era5_to_hightune_units = {
     "kg kg**-1": "kg kg-1",
     "K s**-1": "K s-1",
     "kg kg**-1 s**-1": "kg kg-1 s-1",
+    "W m**-2": "W m-2",
 }

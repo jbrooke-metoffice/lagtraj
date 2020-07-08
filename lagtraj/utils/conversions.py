@@ -4,6 +4,8 @@ import xarray as xr
 import datetime
 from thermo import rh_hightune
 
+# TODO: fix CF-compliance to some extent
+
 rg = 9.80665
 cp = 1004.0
 rlv = 2.5008e6
@@ -33,6 +35,7 @@ def ds_time_to_seconds(ds):
     attrs = {
         "long_name": "time",
         "units": "seconds since " + ds.time[0].values.astype("str"),
+        "calendar": "proleptic_gregorian",
     }
     # Not sure why a float is needed
     ds["time"] = ("time", np.arange(len(ds.time)) * 3600.0, attrs)
@@ -259,7 +262,9 @@ def racmo_from_era5(conversion_dict):
     }
     for variable in variables_to_manually_add:
         ds_racmo[variable] = ds_era5[variables_to_manually_add[variable]]
-        ds_racmo[variable].assign_attrs(racmo_variables[variable])
+        ds_racmo[variable] = ds_racmo[variable].assign_attrs(
+            **racmo_variables[variable]
+        )
     # Soil moisture: combine levels
     swvl1 = ds_era5["swvl1"].values
     swvl2 = ds_era5["swvl2"].values
@@ -291,13 +296,15 @@ def racmo_from_era5(conversion_dict):
     )
     # Orography: derive from surface geopotential
     ds_racmo["orog"] = ds_era5["z"] / rg
-    ds_racmo["orog"].assign_attrs(racmo_variables["orog"])
+    ds_racmo["orog"] = ds_racmo["orog"].assign_attrs(**racmo_variables["orog"])
     # Heat roughness, derive from "flsr" variable
     ds_racmo["heat_rough"] = np.exp(ds_era5["flsr"])
-    ds_racmo["heat_rough"].assign_attrs(racmo_variables["heat_rough"])
+    ds_racmo["heat_rough"] = ds_racmo["heat_rough"].assign_attrs(
+        **racmo_variables["heat_rough"]
+    )
     # Apply correction to t_skin (see output files)
     ds_racmo["t_skin"] = ds_era5["stl1"] + 1.0
-    ds_racmo["t_skin"].assign_attrs(racmo_variables["t_skin"])
+    ds_racmo["t_skin"] = ds_racmo["t_skin"].assign_attrs(**racmo_variables["t_skin"])
     # Surface fluxes: obtain from time mean in ERA data, do not change sign
     sfc_sens_flx = central_estimate(ds_era5["msshf"].values)
     ds_racmo["sfc_sens_flx"] = (
@@ -315,15 +322,20 @@ def racmo_from_era5(conversion_dict):
     ds_racmo["time_traj"] = (
         ds_era5["time"] - np.datetime64("1970-01-01T00:00")
     ) / np.timedelta64(1, "s")
-    ds_racmo["time_traj"].assign_attrs(racmo_variables["time_traj"])
+    ds_racmo["time_traj"] = ds_racmo["time_traj"].assign_attrs(
+        **racmo_variables["time_traj"]
+    )
     ds_racmo["DS"] = ["Trajectory origin"]
-    ds_racmo["DS"].assign_attrs(racmo_variables["DS"])
-    ds_racmo["timDS"] = [ds_era5.datetime_origin]
-    ds_racmo["timDS"].assign_attrs(racmo_variables["timDS"])
+    ds_racmo["DS"] = ds_racmo["DS"].assign_attrs(**racmo_variables["DS"])
+    ds_racmo["timDS"] = [
+        (np.datetime64(ds_era5.datetime_origin) - np.datetime64("1970-01-01T00:00"))
+        / np.timedelta64(1, "s")
+    ]
+    ds_racmo["timDS"] = ds_racmo["timDS"].assign_attrs(**racmo_variables["timDS"])
     ds_racmo["latDS"] = [ds_era5.lat_origin]
-    ds_racmo["latDS"].assign_attrs(racmo_variables["latDS"])
+    ds_racmo["latDS"] = ds_racmo["latDS"].assign_attrs(**racmo_variables["latDS"])
     ds_racmo["lonDS"] = [ds_era5.lon_origin]
-    ds_racmo["lonDS"].assign_attrs(racmo_variables["lonDS"])
+    ds_racmo["lonDS"] = ds_racmo["lonDS"].assign_attrs(**racmo_variables["lonDS"])
     # Change order of data, to confirm to other RACMO input
     ds_racmo = ds_racmo.sortby("nlev", ascending=True)
     ds_racmo = ds_racmo.sortby("nlevp1", ascending=True)
@@ -531,7 +543,7 @@ racmo_variables = {
         "long_name": "skin temperature",
         "t_skin_correct": "Skin temperature has been corrected by 1.000000. Motivation: value from IFS is actually the open SST, which is lower than the skin temperature.",
     },
-    "q_skin": {"units": "skin reservoir content", "long_name": "m of water"},
+    "q_skin": {"units": "m of water", "long_name": "skin reservoir content"},
     "snow": {"units": "m, liquid equivalent", "long_name": "snow depth"},
     "t_snow": {"units": "K", "long_name": "snow temperature"},
     "albedo_snow": {"units": "0-1", "long_name": "snow albedo"},
@@ -675,13 +687,13 @@ def hightune_from_era5(conversion_dict):
         ds_hightune[variable] = da_era5
     # TKE, set to zero
     ds_hightune["tke"] = 0.0 * (ds_era5["u"] * ds_era5["u"])
-    ds_hightune["tke"].assign_attrs(hightune_variables["tke"])
+    ds_hightune["tke"] = ds_hightune["tke"].assign_attrs(**hightune_variables["tke"])
     # Heat roughness, derive from "flsr" variable
     ds_hightune["z0h"] = np.exp(ds_era5["flsr"])
-    ds_hightune["z0h"].assign_attrs(hightune_variables["z0h"])
+    ds_hightune["z0h"] = ds_hightune["z0h"].assign_attrs(**hightune_variables["z0h"])
     # Need to check t_skin correction
     ds_hightune["ts"] = ds_era5["stl1"] + 1.0
-    ds_hightune["ts"].assign_attrs(hightune_variables["ts"])
+    ds_hightune["ts"] = ds_hightune["ts"].assign_attrs(**hightune_variables["ts"])
     # Surface fluxes: obtain from time mean in ERA data, change sign for hightune!
     sfc_sens_flx = -central_estimate(ds_era5["msshf"].values)
     ds_hightune["sfc_sens_flx"] = (
@@ -732,7 +744,7 @@ def hightune_from_era5(conversion_dict):
     ds_hightune["rh"] = rh_hightune(
         ds_hightune["temp"], ds_hightune["pressure"], ds_hightune["qt"],
     )
-    ds_hightune["rh"].assign_attrs(hightune_variables["rh"])
+    ds_hightune["rh"] = ds_hightune["rh"].assign_attrs(**hightune_variables["rh"])
     # Final checks: are all variables present?
     for var in hightune_variables:
         if var not in ds_hightune:

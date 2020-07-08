@@ -1172,6 +1172,7 @@ def fix_units(ds_to_fix):
         "m of water equivalent": "m",
         "~": "1",
         "(0 - 1) s**-1": "s**-1",
+        "(0 - 1) m**-1": "m**-1",
     }
     for variable in ds_to_fix.variables:
         if hasattr(ds_to_fix[variable], "units"):
@@ -1570,6 +1571,12 @@ def dummy_forcings(mf_list, forcings_dict):
     ds_out = xr.combine_by_coords((ds_out, ds_traj))
     add_dict_to_global_attrs(ds_out, ds_traj.attrs)
     fix_units(ds_out)
+    # Remove standard name, as units not CF compliant
+    for variable in ["sshf", "slhf", "sshf_local", "slhf_local"]:
+        ds_out[variable].attrs = {
+            "long_name": ds_out[variable].long_name + " time integral",
+            "units": ds_out[variable].units,
+        }
     ds_out["latitude"].attrs = {"long_name": "latitude", "units": "degrees_north"}
     ds_out["longitude"].attrs = {"long_name": "longitude", "units": "degrees_east"}
     add_globals_attrs_to_ds(ds_out)

@@ -2,6 +2,7 @@
 import numpy as np
 import xarray as xr
 import datetime
+from thermo import rh_hightune
 
 rg = 9.80665
 cp = 1004.0
@@ -25,6 +26,16 @@ def add_dict_to_global_attrs(ds_to_add_to, dictionary):
     """Adds global attributes to datasets"""
     for attribute in dictionary:
         ds_to_add_to.attrs[attribute] = dictionary[attribute]
+
+
+def ds_time_to_seconds(ds):
+    """Use seconds rather than hours as time unit in data"""
+    attrs = {
+        "long_name": "time",
+        "units": "seconds since " + ds.time[0].values.astype("str"),
+    }
+    # Not sure why a float is needed
+    ds["time"] = ("time", np.arange(len(ds.time)) * 3600.0, attrs)
 
 
 # This can probably be replaced by the generic
@@ -305,13 +316,13 @@ def racmo_from_era5(conversion_dict):
         ds_era5["time"] - np.datetime64("1970-01-01T00:00")
     ) / np.timedelta64(1, "s")
     ds_racmo["time_traj"].assign_attrs(racmo_variables["time_traj"])
-    ds_racmo["DS"] = "Trajectory origin"
+    ds_racmo["DS"] = ["Trajectory origin"]
     ds_racmo["DS"].assign_attrs(racmo_variables["DS"])
-    ds_racmo["timDS"] = ds_era5.datetime_origin
+    ds_racmo["timDS"] = [ds_era5.datetime_origin]
     ds_racmo["timDS"].assign_attrs(racmo_variables["timDS"])
-    ds_racmo["latDS"] = ds_era5.lat_origin
+    ds_racmo["latDS"] = [ds_era5.lat_origin]
     ds_racmo["latDS"].assign_attrs(racmo_variables["latDS"])
-    ds_racmo["lonDS"] = ds_era5.lon_origin
+    ds_racmo["lonDS"] = [ds_era5.lon_origin]
     ds_racmo["lonDS"].assign_attrs(racmo_variables["lonDS"])
     # Change order of data, to confirm to other RACMO input
     ds_racmo = ds_racmo.sortby("nlev", ascending=True)
@@ -336,6 +347,8 @@ def racmo_from_era5(conversion_dict):
         "t_skin_correct": "Skin temperature has been corrected by 1.000000. Motivation: value from IFS is actually the open SST, which is lower than the skin temperature.",
     }
     add_dict_to_global_attrs(ds_racmo, racmo_dict)
+    # Convert time to seconds
+    ds_time_to_seconds(ds_racmo)
     ds_racmo.to_netcdf("ds_racmo.nc")
 
 
@@ -716,6 +729,10 @@ def hightune_from_era5(conversion_dict):
         sfc_lat_flx,
         hightune_variables["wprtp"],
     )
+    ds_hightune["rh"] = rh_hightune(
+        ds_hightune["temp"], ds_hightune["pressure"], ds_hightune["qt"],
+    )
+    ds_hightune["rh"].assign_attrs(hightune_variables["rh"])
     # Final checks: are all variables present?
     for var in hightune_variables:
         if var not in ds_hightune:
@@ -729,8 +746,8 @@ def hightune_from_era5(conversion_dict):
         "modifications": "NEEDS ADDING",
         "case": "NEEDS ADDING",
         "script": "https://github.com/EUREC4A-UK/lagtraj",
-        "startDate": ds_hightune["time"][0],
-        "endDate": ds_hightune["time"][-1],
+        "startDate": ds_hightune["time"][0].values.astype("str"),
+        "endDate": ds_hightune["time"][-1].values.astype("str"),
         "tadv": 0,
         "tadvh": 1,
         "tadvv": 0,
@@ -750,6 +767,8 @@ def hightune_from_era5(conversion_dict):
         "surfaceForcing": "ts",
         "surfaceForcingWind": "z0_lagtraj",
     }
+    add_dict_to_global_attrs(ds_hightune, hightune_dictionary)
+    ds_time_to_seconds(ds_hightune)
     ds_hightune.to_netcdf("ds_hightune.nc")
 
 

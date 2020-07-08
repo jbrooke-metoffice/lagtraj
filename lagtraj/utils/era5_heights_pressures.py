@@ -39,6 +39,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from conversions import racmo_from_era5, hightune_from_era5
+from thermo import theta_l_extensive
 
 # Optional numba dependency
 try:
@@ -475,51 +476,6 @@ def era5_on_pressure_levels(ds_model_levels, pressures_array):
                         upper_extrapolation,
                     )
     return ds_pressure_levels
-
-
-def theta_l_extensive(tt, pp, qt, ql, qi):
-    cpd = 1005.7  # specific heat at constant pressure (dry air).
-    cpv = 1870.0  # specific heat at constant pressure (vapor).
-    cpl = 4190.0  # specific heat at constant pressure (liquid).
-    cpi = 2106.0  # specific heat at constant pressure (ice).
-    srd = 6775.0  # specific entropy at triple point (dry air).
-    srv = 10320.0  # specific entropy at triple point (vapor).
-    srl = 3517.0  # specific entropy at triple point (liquid).
-    sri = 2296.0  # specific entropy at triple point (ice).
-    rd = 287.04  # gas constant for dry air.
-    rv = 461.5  # gas constant for water vapor
-    tref = 273.15  # reference temperature
-    pref = 100000.0  # reference pressure
-    theta_l = xr.where(
-        ql + qi < 0.999 * qt,
-        (
-            tt
-            * (tt / tref)
-            ** (
-                qt * (cpv - cpd) / cpd + ql * (cpl - cpv) / cpd + qi * (cpi - cpv) / cpd
-            )
-            * (pp / (pref * (1 + ((qt - ql - qi) * rv) / ((1 - qt) * rd))))
-            ** (-(1 - qt) * rd / cpd)
-            * (pp / (pref * (1 + ((1 - qt) * rd) / ((qt - ql - qi) * rv))))
-            ** (-(qt - ql - qi) * rv / cpd)
-            * np.exp(-ql * (srv - srl) / cpd - qi * (srv - sri) / cpd)
-            * (1.0 / (1.0 + (qt * rv) / ((1.0 - qt) * rd))) ** ((1.0 - qt) * rd / cpd)
-            * (1.0 / (1.0 + ((1.0 - qt) * rd) / (qt * rv))) ** ((qt) * rv / cpd)
-        ),
-        (
-            tt
-            * (tt / tref)
-            ** (
-                qt * (cpv - cpd) / cpd + ql * (cpl - cpv) / cpd + qi * (cpi - cpv) / cpd
-            )
-            * (pp / (pref * (1 + ((qt - ql - qi) * rv) / ((1 - qt) * rd))))
-            ** (-(1 - qt) * rd / cpd)
-            * np.exp(-ql * (srv - srl) / cpd - qi * (srv - sri) / cpd)
-            * (1.0 / (1.0 + (qt * rv) / ((1.0 - qt) * rd))) ** ((1.0 - qt) * rd / cpd)
-            * (1.0 / (1.0 + ((1.0 - qt) * rd) / (qt * rv))) ** ((qt) * rv / cpd)
-        ),
-    )
-    return theta_l
 
 
 def add_auxiliary_variable(ds_to_expand, var, settings_dictionary):

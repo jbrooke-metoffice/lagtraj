@@ -576,6 +576,17 @@ def longitude_set_meridian(longitude):
     return (longitude + 180.0) % 360.0 - 180.0
 
 
+def ds_time_to_seconds(ds):
+    """Use seconds rather than hours as time unit in data"""
+    attrs = {
+        "long_name": "time",
+        "units": "seconds since " + ds.time[0].values.astype("str"),
+        "calendar": "proleptic_gregorian",
+    }
+    # Not sure why a float is needed
+    ds["time"] = ("time", np.arange(len(ds.time)) * 3600.0, attrs)
+
+
 def era5_normalise_longitude(ds_to_normalise, ds_ref):
     """Normalise longitudes to be between 0 and 360 degrees
     This is needed because these are stored differently in the surface
@@ -1460,6 +1471,7 @@ def dummy_trajectory(mf_list, trajectory_dict):
     fix_units(ds_traj)
     add_globals_attrs_to_ds(ds_traj)
     add_dict_to_global_attrs(ds_traj, trajectory_dict)
+    ds_time_to_seconds(ds_traj)
     ds_traj.to_netcdf("ds_traj.nc")
 
 
@@ -1581,6 +1593,7 @@ def dummy_forcings(mf_list, forcings_dict):
     ds_out["longitude"].attrs = {"long_name": "longitude", "units": "degrees_east"}
     add_globals_attrs_to_ds(ds_out)
     add_dict_to_global_attrs(ds_out, forcings_dict)
+    ds_time_to_seconds(ds_out)
     ds_out.to_netcdf("ds_native_era5.nc")
 
 

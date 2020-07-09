@@ -30,17 +30,6 @@ def add_dict_to_global_attrs(ds_to_add_to, dictionary):
         ds_to_add_to.attrs[attribute] = dictionary[attribute]
 
 
-def ds_time_to_seconds(ds):
-    """Use seconds rather than hours as time unit in data"""
-    attrs = {
-        "long_name": "time",
-        "units": "seconds since " + ds.time[0].values.astype("str"),
-        "calendar": "proleptic_gregorian",
-    }
-    # Not sure why a float is needed
-    ds["time"] = ("time", np.arange(len(ds.time)) * 3600.0, attrs)
-
-
 # This can probably be replaced by the generic
 # No extrapolation is performed
 # Time axis present, but not lat, lon
@@ -360,7 +349,6 @@ def racmo_from_era5(conversion_dict):
     }
     add_dict_to_global_attrs(ds_racmo, racmo_dict)
     # Convert time to seconds
-    ds_time_to_seconds(ds_racmo)
     ds_racmo.to_netcdf("ds_racmo.nc")
 
 
@@ -780,7 +768,6 @@ def hightune_from_era5(conversion_dict):
         "surfaceForcingWind": "z0_lagtraj",
     }
     add_dict_to_global_attrs(ds_hightune, hightune_dictionary)
-    ds_time_to_seconds(ds_hightune)
     ds_hightune.to_netcdf("ds_hightune.nc")
 
 

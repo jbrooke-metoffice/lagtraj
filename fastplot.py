@@ -5,7 +5,7 @@ my_scale = [-1e-4, 1e-4]
 my_norm = mpl.colors.Normalize(vmin=my_scale[0], vmax=my_scale[1])
 levels = linspace(my_scale[0], my_scale[1], 21)
 
-ds = xr.open_dataset("ds_along_traj.nc")
+ds = xr.open_dataset("ds_native_era5.nc")
 subplot(2, 1, 1)
 ds["dp_fdx"].transpose().plot.contourf(levels=levels, norm=my_norm, cmap="RdBu_r")
 title("regression")

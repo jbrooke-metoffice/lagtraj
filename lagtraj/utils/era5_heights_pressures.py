@@ -1558,7 +1558,7 @@ def dummy_forcings(mf_list, forcings_dict):
         )
         ds_time_step = xr.merge((ds_time_step, ds_tendencies))
         add_geowind_around_centre(ds_time_step, lats_lons_dict)
-        ds_time_step.reset_coords(["latitude", "longitude"])
+        ds_time_step = ds_time_step.reset_coords(["latitude", "longitude"])
         ds_time_height.close()
         ds_out = xr.combine_by_coords((ds_out, ds_time_step))
         ds_gradients.close()

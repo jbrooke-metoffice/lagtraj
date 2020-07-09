@@ -184,19 +184,19 @@ def racmo_from_era5(conversion_dict):
     racmo_half_coord = {
         "nlevp1": (
             "nlevp1",
-            (np.arange(len(racmo_half_array)) + 1)[::-1],
+            (np.arange(len(racmo_half_array)) + 1.0)[::-1],
             {"long_name": "model half levels"},
         )
     }
     racmo_full_coord = {
         "nlev": (
             "nlev",
-            (np.arange(len(racmo_full_array)) + 1)[::-1],
+            (np.arange(len(racmo_full_array)) + 1.0)[::-1],
             {"long_name": "model full levels"},
         )
     }
     racmo_soil_coord = {
-        "nlevs": ("nlevs", np.arange(4) + 1, {"long_name": "soil levels"})
+        "nlevs": ("nlevs", np.arange(4) + 1.0, {"long_name": "soil levels"})
     }
     ds_racmo = xr.Dataset(
         coords={

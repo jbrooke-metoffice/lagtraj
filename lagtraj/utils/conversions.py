@@ -184,6 +184,13 @@ def racmo_from_era5(conversion_dict):
             {"long_name": "model full levels"},
         )
     }
+    nDS_coord = {
+        "nDS": (
+            "nDS",
+            [0],
+            {},
+        )
+    }
     racmo_soil_coord = {
         "nlevs": ("nlevs", np.arange(4) + 1.0, {"long_name": "soil levels"})
     }
@@ -193,6 +200,7 @@ def racmo_from_era5(conversion_dict):
             **racmo_full_coord,
             **racmo_half_coord,
             **racmo_soil_coord,
+            **nDS_coord
         }
     )
     # Variables from dictionary
@@ -332,17 +340,13 @@ def racmo_from_era5(conversion_dict):
     ds_racmo["time_traj"] = ds_racmo["time_traj"].assign_attrs(
         **racmo_variables["time_traj"]
     )
-    ds_racmo["DS"] = ["Trajectory origin"]
-    ds_racmo["DS"] = ds_racmo["DS"].assign_attrs(**racmo_variables["DS"])
-    ds_racmo["timDS"] = [
+    ds_racmo["DS"] = (("nDS"),["Trajectory origin"],racmo_variables["DS"])
+    ds_racmo["timDS"] = (("nDS"),[
         (np.datetime64(ds_era5.datetime_origin) - np.datetime64("1970-01-01T00:00"))
         / np.timedelta64(1, "s")
-    ]
-    ds_racmo["timDS"] = ds_racmo["timDS"].assign_attrs(**racmo_variables["timDS"])
-    ds_racmo["latDS"] = [ds_era5.lat_origin]
-    ds_racmo["latDS"] = ds_racmo["latDS"].assign_attrs(**racmo_variables["latDS"])
-    ds_racmo["lonDS"] = [ds_era5.lon_origin]
-    ds_racmo["lonDS"] = ds_racmo["lonDS"].assign_attrs(**racmo_variables["lonDS"])
+    ],racmo_variables["timDS"])
+    ds_racmo["latDS"] = (("nDS"),[ds_era5.lat_origin],racmo_variables["latDS"])
+    ds_racmo["lonDS"] = (("nDS"),[ds_era5.lon_origin],racmo_variables["lonDS"])
     # Change order of data, to confirm to other RACMO input
     ds_racmo = ds_racmo.sortby("nlev", ascending=True)
     ds_racmo = ds_racmo.sortby("nlevp1", ascending=True)

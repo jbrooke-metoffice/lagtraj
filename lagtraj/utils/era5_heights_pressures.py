@@ -1247,7 +1247,7 @@ def trajectory_at_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
     ds_traj["u_traj"][time_exact_index] = u_traj
     ds_traj["v_traj"][time_exact_index] = v_traj
     ds_traj["processed"][time_exact_index] = True
-    ds_traj.to_netcdf("ds_traj.nc")
+    ds_traj.to_netcdf(trajectory_dict["traj_file"])
 
 
 def trajectory_around_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
@@ -1306,7 +1306,7 @@ def trajectory_around_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict):
     ds_traj["u_traj"][time_greater_index] = u_end
     ds_traj["v_traj"][time_greater_index] = v_end
     ds_traj["processed"][time_greater_index] = True
-    ds_traj.to_netcdf("ds_traj.nc")
+    ds_traj.to_netcdf(trajectory_dict["traj_file"])
 
 
 def forward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
@@ -1349,7 +1349,7 @@ def forward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
         ds_traj["u_traj"][forward_index] = u_end
         ds_traj["v_traj"][forward_index] = v_end
         ds_traj["processed"][forward_index] = True
-        ds_traj.to_netcdf("ds_traj.nc")
+        ds_traj.to_netcdf(trajectory_dict["traj_file"])
 
 
 def backward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
@@ -1392,7 +1392,7 @@ def backward_trajectory(mf_list, vars_for_traj, ds_traj, trajectory_dict):
         ds_traj["u_traj"][backward_index] = u_begin
         ds_traj["v_traj"][backward_index] = v_begin
         ds_traj["processed"][backward_index] = True
-        ds_traj.to_netcdf("ds_traj.nc")
+        ds_traj.to_netcdf(trajectory_dict["traj_file"])
 
 
 def dummy_trajectory(mf_list, trajectory_dict):
@@ -1473,7 +1473,7 @@ def dummy_trajectory(mf_list, trajectory_dict):
     add_globals_attrs_to_ds(ds_traj)
     add_dict_to_global_attrs(ds_traj, trajectory_dict)
     ds_time_to_seconds(ds_traj)
-    ds_traj.to_netcdf("ds_traj.nc")
+    ds_traj.to_netcdf(trajectory_dict["traj_file"])
 
 
 def dummy_forcings(mf_list, forcings_dict):
@@ -1516,7 +1516,9 @@ def dummy_forcings(mf_list, forcings_dict):
             ],
             lats_lons_dict,
         )
-        ds_time_height = era5_on_height_levels(ds_smaller, forcings_dict["output_levels_native"])
+        ds_time_height = era5_on_height_levels(
+            ds_smaller, forcings_dict["output_levels_native"]
+        )
         ds_smaller.close()
         era5_add_lat_lon_meshgrid(ds_time_height)
         ds_profiles = era5_single_point(ds_time_height, lats_lons_dict)
@@ -1578,7 +1580,7 @@ def dummy_forcings(mf_list, forcings_dict):
         ds_profiles.close()
         ds_tendencies.close()
         ds_time_step.close()
-        ds_out.to_netcdf("ds_native_era5.nc")
+        ds_out.to_netcdf(forcings_dict["era5_file"])
     # Add trajectory information
     ds_out = xr.combine_by_coords((ds_out, ds_traj))
     add_dict_to_global_attrs(ds_out, ds_traj.attrs)
@@ -1594,7 +1596,7 @@ def dummy_forcings(mf_list, forcings_dict):
     add_globals_attrs_to_ds(ds_out)
     add_dict_to_global_attrs(ds_out, forcings_dict)
     ds_time_to_seconds(ds_out)
-    ds_out.to_netcdf("ds_native_era5.nc")
+    ds_out.to_netcdf(forcings_dict["era5_file"])
 
 
 def main():
@@ -1619,40 +1621,45 @@ def main():
     for this_ds in ds_list:
         era5_normalise_longitude(this_ds, ds_model_an)
     output_levels = np.cumsum(20 * (1.017 ** np.arange(-1, 250)) - 20 * 1.017 ** -1)
-    dummy_trajectory_dict = {
-        "lat_origin": 13.3,
-        "lon_origin": -57.717,
-        "datetime_origin": "2020-02-03T12:30",
-        "backward_duration_hours": 3,
-        "forward_duration_hours": 1,
-        "nr_iterations_traj": 10,
-        # "velocity_strategy": "lower_troposphere_humidity_weighted",
-        # "velocity_strategy": "prescribed_velocity",
-        # "u_traj" : -6.0,
-        # "v_traj" : -0.25,
-        "velocity_strategy": "velocity_at_pressure",
-        "velocity_pressure": 95000.0,
-        # "pres_cutoff_start": 60000.0,
-        # "pres_cutoff_end": 50000.0,
-    }
-    dummy_trajectory(ds_list, dummy_trajectory_dict)
-    dummy_forcings_dict = {
-        "gradients_strategy": "both",
-        "mask": "ocean",
-        "traj_file": "ds_traj.nc",
-        "averaging_width": 4.0,
-        "w_cutoff_start": 70000.0,
-        "w_cutoff_end": 40000.0,
-        "output_levels_native": output_levels,
-    }
-    dummy_forcings(ds_list, dummy_forcings_dict)
-    dummy_conversion_dict = {
-        "nudging_time": "3600.",
-        "input_file": "ds_native_era5.nc",
-        "output_levels_racmo": output_levels,
-    }
-    racmo_from_era5(dummy_conversion_dict)
-    hightune_from_era5(dummy_conversion_dict)
+    for steering_hpa in [975, 950, 925, 900, 875, 850, 825, 800, 775, 750, 725, 700]:
+        dummy_trajectory_dict = {
+            "lat_origin": 13.3,
+            "lon_origin": -57.717,
+            "datetime_origin": "2020-02-03T12:30",
+            "backward_duration_hours": 3,
+            "forward_duration_hours": 1,
+            "nr_iterations_traj": 10,
+            # "velocity_strategy": "lower_troposphere_humidity_weighted",
+            # "velocity_strategy": "prescribed_velocity",
+            # "u_traj" : -6.0,
+            # "v_traj" : -0.25,
+            "velocity_strategy": "velocity_at_pressure",
+            "velocity_pressure": 100.0 * steering_hpa,
+            # "pres_cutoff_start": 60000.0,
+            # "pres_cutoff_end": 50000.0,
+            "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
+        }
+        dummy_trajectory(ds_list, dummy_trajectory_dict)
+        dummy_forcings_dict = {
+            "gradients_strategy": "both",
+            "mask": "ocean",
+            "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
+            "averaging_width": 4.0,
+            "w_cutoff_start": 70000.0,
+            "w_cutoff_end": 40000.0,
+            "output_levels_native": output_levels,
+            "era5_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
+        }
+        dummy_forcings(ds_list, dummy_forcings_dict)
+        dummy_conversion_dict = {
+            "nudging_time": "3600.",
+            "input_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
+            "output_levels_racmo": output_levels,
+            "racmo_file": "ds_racmo_" + str(steering_hpa) + ".nc",
+            "hightune_file": "ds_hightune_" + str(steering_hpa) + ".nc",
+        }
+        racmo_from_era5(dummy_conversion_dict)
+        hightune_from_era5(dummy_conversion_dict)
 
 
 if __name__ == "__main__":

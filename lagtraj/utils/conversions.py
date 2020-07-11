@@ -367,7 +367,7 @@ def racmo_from_era5(conversion_dict):
     }
     add_dict_to_global_attrs(ds_racmo, racmo_dict)
     # Convert time to seconds
-    ds_racmo.to_netcdf("ds_racmo.nc")
+    ds_racmo.to_netcdf(conversion_dict["racmo_file"])
 
 
 # racmo variable : era5 variable
@@ -795,7 +795,7 @@ def hightune_from_era5(conversion_dict):
         "surfaceForcingWind": "z0_lagtraj",
     }
     add_dict_to_global_attrs(ds_hightune, hightune_dictionary)
-    ds_hightune.to_netcdf("ds_hightune.nc")
+    ds_hightune.to_netcdf(conversion_dict["hightune_file"])
 
 
 # hightune variable : era5 variable

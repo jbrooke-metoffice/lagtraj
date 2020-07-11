@@ -1,3 +1,7 @@
+""" Thermodynamics routine using definitions based on the work by
+Romps and Kuang (2010), but with specific humidities rather than
+mixing ratios.
+"""
 import xarray as xr
 import numpy as np
 
@@ -21,6 +25,7 @@ p_triple_point = 610.7  # triple point pressure
 
 
 def theta_l_extensive(tt, pp, qt, ql, qi):
+    """theta_l: becomes theta for a dry parcel"""
     theta_l = xr.where(
         ql + qi < 0.999 * qt,
         (
@@ -54,6 +59,7 @@ def theta_l_extensive(tt, pp, qt, ql, qi):
 
 
 def esatl(tt):
+    """saturation pressure over the liquid phase"""
     return p_triple_point * np.exp(
         (1.0 / tref - 1.0 / tt) * ((hrv - hrl) - (cpv - cpl) * tref) / rv
         + ((cpv - cpl) / rv) * np.log(tt / tref)
@@ -61,6 +67,7 @@ def esatl(tt):
 
 
 def esati(tt):
+    """saturation pressure over the ice phase"""
     return p_triple_point * np.exp(
         (1.0 / tref - 1.0 / tt) * ((hrv - hri) - (cpv - cpi) * tref) / rv
         + ((cpv - cpi) / rv) * np.log(tt / tref)
@@ -68,12 +75,15 @@ def esati(tt):
 
 
 def qvsl(tt, pp):
+    """saturation specific humidity over the liquid phase"""
     return rd / rv * esatl(tt) / (pp - (1.0 - rd / rv) * esatl(tt))
 
 
 def qvsi(tt, pp):
+    """saturation specific humidity over the ice phase"""
     return rd / rv * esati(tt) / (pp - (1.0 - rd / rv) * esati(tt))
 
 
 def rh_hightune(tt, pp, qt):
+    """relative humidity, switching from liquid to ice at tref"""
     return xr.where(tt < tref, 100.0 * qt / qvsi(tt, pp), 100.0 * qt / qvsl(tt, pp))

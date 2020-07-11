@@ -166,7 +166,7 @@ def racmo_from_era5(conversion_dict):
     """Obtain a racmo input file from era5 variable set at high resolution"""
     ds_filename = conversion_dict["input_file"]
     ds_era5 = xr.open_dataset(ds_filename)
-    racmo_half_array = np.arange(0, 10000.0, 40.0)
+    racmo_half_array = conversion_dict["output_levels_racmo"]
     # Put full levels midway between half-levels, I think this is consistent with DALES
     # Change order of data, to confirm to other RACMO input
     racmo_full_array = 0.5 * (racmo_half_array[:-1] + racmo_half_array[1:])
@@ -253,6 +253,24 @@ def racmo_from_era5(conversion_dict):
         ds_racmo[variable] = ds_era5[variables_to_manually_add[variable]]
         ds_racmo[variable] = ds_racmo[variable].assign_attrs(
             **racmo_variables[variable]
+        )
+    variables_to_centralise = {
+        "msnswrf": "msnswrf",
+        "msnlwrf": "msnlwrf",
+        "mtnswrf": "mtnswrf",
+        "mtnlwrf": "mtnlwrf",
+        "mtnswrfcs": "mtnswrfcs",
+        "mtnlwrfcs": "mtnlwrfcs",
+        "msnswrfcs": "msnswrfcs",
+        "msnlwrfcs": "msnlwrfcs",
+        "mtdwswrf": "mtdwswrf",
+    }
+    for variable in variables_to_centralise:
+        this_central_estimate = central_estimate(ds_era5[variable].values)
+        ds_racmo[variable] = (
+            ("time"),
+            this_central_estimate,
+            racmo_variables[variable],
         )
     # Soil moisture: combine levels
     swvl1 = ds_era5["swvl1"].values
@@ -405,15 +423,6 @@ racmo_from_era5_variables = {
     "sdor": "sdor",
     "isor": "isor",
     "anor": "anor",
-    "msnswrf": "msnswrf",
-    "msnlwrf": "msnlwrf",
-    "mtnswrf": "mtnswrf",
-    "mtnlwrf": "mtnlwrf",
-    "mtnswrfcs": "mtnswrfcs",
-    "mtnlwrfcs": "mtnlwrfcs",
-    "msnswrfcs": "msnswrfcs",
-    "msnlwrfcs": "msnlwrfcs",
-    "mtdwswrf": "mtdwswrf",
 }
 
 racmo_variables = {
@@ -673,6 +682,24 @@ def hightune_from_era5(conversion_dict):
             )
             raise Exception(except_str)
         ds_hightune[variable] = da_era5
+    variables_to_centralise = {
+        "msnswrf": "msnswrf",
+        "msnlwrf": "msnlwrf",
+        "mtnswrf": "mtnswrf",
+        "mtnlwrf": "mtnlwrf",
+        "mtnswrfcs": "mtnswrfcs",
+        "mtnlwrfcs": "mtnlwrfcs",
+        "msnswrfcs": "msnswrfcs",
+        "msnlwrfcs": "msnlwrfcs",
+        "mtdwswrf": "mtdwswrf",
+    }
+    for variable in variables_to_centralise:
+        this_central_estimate = central_estimate(ds_era5[variable].values)
+        ds_hightune[variable] = (
+            ("time"),
+            this_central_estimate,
+            hightune_variables[variable],
+        )
     # TKE, set to zero
     ds_hightune["tke"] = 0.0 * (ds_era5["u"] * ds_era5["u"])
     ds_hightune["tke"] = ds_hightune["tke"].assign_attrs(**hightune_variables["tke"])
@@ -816,15 +843,6 @@ hightune_from_era5_variables = {
     "u_nudging": "u",
     "v_nudging": "v",
     "z0m": "fsr",
-    "msnswrf": "msnswrf",
-    "msnlwrf": "msnlwrf",
-    "mtnswrf": "mtnswrf",
-    "mtnlwrf": "mtnlwrf",
-    "mtnswrfcs": "mtnswrfcs",
-    "mtnlwrfcs": "mtnlwrfcs",
-    "msnswrfcs": "msnswrfcs",
-    "msnlwrfcs": "msnlwrfcs",
-    "mtdwswrf": "mtdwswrf",
 }
 
 

@@ -9,6 +9,7 @@ ERA5 utilities that can
 - Add auxiliary variables
 
 TODO
+- Midtime on radiation!
 - Use half-levels as a coordinate for the relevant variables in RACMO.
 - Combine soil layers for RACMO
 - Discuss exact definitions of specific humidity
@@ -576,15 +577,15 @@ def longitude_set_meridian(longitude):
     return (longitude + 180.0) % 360.0 - 180.0
 
 
-def ds_time_to_seconds(ds):
+def ds_time_to_seconds(ds_inout):
     """Use seconds rather than hours as time unit in data"""
     attrs = {
         "long_name": "time",
-        "units": "seconds since " + ds.time[0].values.astype("str"),
+        "units": "seconds since " + ds_inout.time[0].values.astype("str"),
         "calendar": "proleptic_gregorian",
     }
     # Not sure why a float is needed
-    ds["time"] = ("time", np.arange(len(ds.time)) * 3600.0, attrs)
+    ds_inout["time"] = ("time", np.arange(len(ds_inout.time)) * 3600.0, attrs)
 
 
 def era5_normalise_longitude(ds_to_normalise, ds_ref):
@@ -1495,7 +1496,6 @@ def dummy_forcings(mf_list, forcings_dict):
             "v_traj": ds_traj["v_traj"][index].values,
         }
         lats_lons_dict.update(forcings_dict)
-        out_levels = np.arange(0, 10000.0, 40.0)
         ds_smaller = era5_subset_by_time(mf_list, this_time, lats_lons_dict)
         add_heights_and_pressures(ds_smaller)
         add_auxiliary_variables(
@@ -1516,7 +1516,7 @@ def dummy_forcings(mf_list, forcings_dict):
             ],
             lats_lons_dict,
         )
-        ds_time_height = era5_on_height_levels(ds_smaller, out_levels)
+        ds_time_height = era5_on_height_levels(ds_smaller, forcings_dict["output_levels_native"])
         ds_smaller.close()
         era5_add_lat_lon_meshgrid(ds_time_height)
         ds_profiles = era5_single_point(ds_time_height, lats_lons_dict)
@@ -1618,6 +1618,7 @@ def main():
     ds_list = [ds_model_an, ds_single_an, ds_model_fc, ds_single_fc]
     for this_ds in ds_list:
         era5_normalise_longitude(this_ds, ds_model_an)
+    output_levels = np.cumsum(20 * (1.017 ** np.arange(-1, 250)) - 20 * 1.017 ** -1)
     dummy_trajectory_dict = {
         "lat_origin": 13.3,
         "lon_origin": -57.717,
@@ -1642,11 +1643,13 @@ def main():
         "averaging_width": 4.0,
         "w_cutoff_start": 70000.0,
         "w_cutoff_end": 40000.0,
+        "output_levels_native": output_levels,
     }
     dummy_forcings(ds_list, dummy_forcings_dict)
     dummy_conversion_dict = {
         "nudging_time": "3600.",
         "input_file": "ds_native_era5.nc",
+        "output_levels_racmo": output_levels,
     }
     racmo_from_era5(dummy_conversion_dict)
     hightune_from_era5(dummy_conversion_dict)

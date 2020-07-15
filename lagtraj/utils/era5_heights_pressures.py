@@ -1621,45 +1621,45 @@ def main():
     for this_ds in ds_list:
         era5_normalise_longitude(this_ds, ds_model_an)
     output_levels = np.cumsum(20 * (1.017 ** np.arange(-1, 250)) - 20 * 1.017 ** -1)
-    for steering_hpa in [975, 950, 925, 900, 875, 850, 825, 800, 775, 750, 725, 700]:
-        dummy_trajectory_dict = {
-            "lat_origin": 13.3,
-            "lon_origin": -57.717,
-            "datetime_origin": "2020-02-03T12:30",
-            "backward_duration_hours": 3,
-            "forward_duration_hours": 1,
-            "nr_iterations_traj": 10,
-            # "velocity_strategy": "lower_troposphere_humidity_weighted",
-            # "velocity_strategy": "prescribed_velocity",
-            # "u_traj" : -6.0,
-            # "v_traj" : -0.25,
-            "velocity_strategy": "velocity_at_pressure",
-            "velocity_pressure": 100.0 * steering_hpa,
-            # "pres_cutoff_start": 60000.0,
-            # "pres_cutoff_end": 50000.0,
-            "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
-        }
-        dummy_trajectory(ds_list, dummy_trajectory_dict)
-        dummy_forcings_dict = {
-            "gradients_strategy": "both",
-            "mask": "ocean",
-            "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
-            "averaging_width": 4.0,
-            "w_cutoff_start": 70000.0,
-            "w_cutoff_end": 40000.0,
-            "output_levels_native": output_levels,
-            "era5_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
-        }
-        dummy_forcings(ds_list, dummy_forcings_dict)
-        dummy_conversion_dict = {
-            "nudging_time": "3600.",
-            "input_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
-            "output_levels_racmo": output_levels,
-            "racmo_file": "ds_racmo_" + str(steering_hpa) + ".nc",
-            "hightune_file": "ds_hightune_" + str(steering_hpa) + ".nc",
-        }
-        racmo_from_era5(dummy_conversion_dict)
-        hightune_from_era5(dummy_conversion_dict)
+    steering_hpa = 950
+    dummy_trajectory_dict = {
+        "lat_origin": 13.3,
+        "lon_origin": -57.717,
+        "datetime_origin": "2020-02-03T12:30",
+        "backward_duration_hours": 3,
+        "forward_duration_hours": 1,
+        "nr_iterations_traj": 10,
+        # "velocity_strategy": "lower_troposphere_humidity_weighted",
+        # "velocity_strategy": "prescribed_velocity",
+        # "u_traj" : -6.0,
+        # "v_traj" : -0.25,
+        "velocity_strategy": "velocity_at_pressure",
+        "velocity_pressure": 100.0 * steering_hpa,
+        # "pres_cutoff_start": 60000.0,
+        # "pres_cutoff_end": 50000.0,
+        "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
+    }
+    dummy_trajectory(ds_list, dummy_trajectory_dict)
+    dummy_forcings_dict = {
+        "gradients_strategy": "both",
+        "mask": "ocean",
+        "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
+        "averaging_width": 4.0,
+        "w_cutoff_start": 70000.0,
+        "w_cutoff_end": 40000.0,
+        "output_levels_native": output_levels,
+        "era5_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
+    }
+    dummy_forcings(ds_list, dummy_forcings_dict)
+    dummy_conversion_dict = {
+        "nudging_time": "3600.",
+        "input_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
+        "output_levels_racmo": output_levels,
+        "racmo_file": "ds_racmo_" + str(steering_hpa) + ".nc",
+        "hightune_file": "ds_hightune_" + str(steering_hpa) + ".nc",
+    }
+    racmo_from_era5(dummy_conversion_dict)
+    hightune_from_era5(dummy_conversion_dict)
 
 
 if __name__ == "__main__":

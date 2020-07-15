@@ -24,12 +24,6 @@ except ImportError:
     print("Running without numba")
 
 
-def add_dict_to_global_attrs(ds_to_add_to, dictionary):
-    """Adds global attributes to datasets"""
-    for attribute in dictionary:
-        ds_to_add_to.attrs[attribute] = dictionary[attribute]
-
-
 # This can probably be replaced by the generic
 # No extrapolation is performed
 # Time axis present, but not lat, lon
@@ -152,16 +146,6 @@ def central_estimate(a_in):
     return np.concatenate(([a_in[0]], 0.5 * (a_in[1:-1] + a_in[2:]), [a_in[-1]]))
 
 
-def era5_units_change(da_era5, replacement_dictionary):
-    """era5 units : replacement units
-    we replace era5 units here"""
-    these_units = da_era5.units
-    if these_units in replacement_dictionary:
-        return replacement_dictionary[these_units]
-    else:
-        return these_units
-
-
 def racmo_from_era5(conversion_dict):
     """Obtain a racmo input file from era5 variable set at high resolution"""
     ds_filename = conversion_dict["input_file"]
@@ -209,7 +193,7 @@ def racmo_from_era5(conversion_dict):
         era5_var = racmo_from_era5_variables[variable]
         da_era5 = ds_era5[era5_var]
         # perform units check
-        unit_guess = era5_units_change(da_era5, era5_to_racmo_units)
+        unit_guess = era5_to_racmo_units.get(da_era5.units, da_era5.units)
         if not (unit_guess == racmo_variables[variable]["units"]):
             except_str = (
                 "Incompatible units between ERA5 and RACMO for variable "
@@ -259,8 +243,7 @@ def racmo_from_era5(conversion_dict):
     }
     for variable in variables_to_manually_add:
         ds_racmo[variable] = ds_era5[variables_to_manually_add[variable]]
-        ds_racmo[variable] = ds_racmo[variable].assign_attrs(
-            **racmo_variables[variable]
+        ds_racmo[variable].attrs.update(**racmo_variables[variable]
         )
     variables_to_centralise = {
         "msnswrf": "msnswrf",
@@ -311,15 +294,15 @@ def racmo_from_era5(conversion_dict):
     )
     # Orography: derive from surface geopotential
     ds_racmo["orog"] = ds_era5["z"] / rg
-    ds_racmo["orog"] = ds_racmo["orog"].assign_attrs(**racmo_variables["orog"])
+    ds_racmo["orog"].attrs.update(**racmo_variables["orog"])
     # Heat roughness, derive from "flsr" variable
     ds_racmo["heat_rough"] = np.exp(ds_era5["flsr"])
-    ds_racmo["heat_rough"] = ds_racmo["heat_rough"].assign_attrs(
+    ds_racmo["heat_rough"].attrs.update(
         **racmo_variables["heat_rough"]
     )
     # Apply correction to t_skin (see output files)
     ds_racmo["t_skin"] = ds_era5["stl1"] + 1.0
-    ds_racmo["t_skin"] = ds_racmo["t_skin"].assign_attrs(**racmo_variables["t_skin"])
+    ds_racmo["t_skin"].attrs.update(**racmo_variables["t_skin"])
     # Surface fluxes: obtain from time mean in ERA data, do not change sign
     sfc_sens_flx = central_estimate(ds_era5["msshf"].values)
     ds_racmo["sfc_sens_flx"] = (
@@ -337,7 +320,7 @@ def racmo_from_era5(conversion_dict):
     ds_racmo["time_traj"] = (
         ds_era5["time"] - np.datetime64("1970-01-01T00:00")
     ) / np.timedelta64(1, "s")
-    ds_racmo["time_traj"] = ds_racmo["time_traj"].assign_attrs(
+    ds_racmo["time_traj"].attrs.update(
         **racmo_variables["time_traj"]
     )
     ds_racmo["DS"] = (("nDS"),["Trajectory origin"],racmo_variables["DS"])
@@ -369,7 +352,7 @@ def racmo_from_era5(conversion_dict):
         "field_capacity": 0.32275,
         "t_skin_correct": "Skin temperature has been corrected by 1.000000. Motivation: value from IFS is actually the open SST, which is lower than the skin temperature.",
     }
-    add_dict_to_global_attrs(ds_racmo, racmo_dict)
+    ds_racmo.attrs.update(**racmo_dict)
     # Convert time to seconds
     ds_racmo.to_netcdf(conversion_dict["racmo_file"])
 
@@ -674,7 +657,7 @@ def hightune_from_era5(conversion_dict):
         era5_var = hightune_from_era5_variables[variable]
         da_era5 = ds_era5[era5_var]
         # perform units check
-        unit_guess = era5_units_change(da_era5, era5_to_hightune_units)
+        unit_guess = era5_to_hightune_units.get(da_era5.units, da_era5.units)
         if not (unit_guess == hightune_variables[variable]["units"]):
             except_str = (
                 "Incompatible units between ERA5 and hightune for variable "
@@ -706,13 +689,13 @@ def hightune_from_era5(conversion_dict):
         )
     # TKE, set to zero
     ds_hightune["tke"] = 0.0 * (ds_era5["u"] * ds_era5["u"])
-    ds_hightune["tke"] = ds_hightune["tke"].assign_attrs(**hightune_variables["tke"])
+    ds_hightune["tke"].attrs.update(**hightune_variables["tke"])
     # Heat roughness, derive from "flsr" variable
     ds_hightune["z0h"] = np.exp(ds_era5["flsr"])
-    ds_hightune["z0h"] = ds_hightune["z0h"].assign_attrs(**hightune_variables["z0h"])
+    ds_hightune["z0h"].attrs.update(**hightune_variables["z0h"])
     # Need to check t_skin correction
     ds_hightune["ts"] = ds_era5["stl1"] + 1.0
-    ds_hightune["ts"] = ds_hightune["ts"].assign_attrs(**hightune_variables["ts"])
+    ds_hightune["ts"].attrs.update(**hightune_variables["ts"])
     # Surface fluxes: obtain from time mean in ERA data, change sign for hightune!
     sfc_sens_flx = -central_estimate(ds_era5["msshf"].values)
     ds_hightune["sfc_sens_flx"] = (
@@ -763,7 +746,7 @@ def hightune_from_era5(conversion_dict):
     ds_hightune["rh"] = rh_hightune(
         ds_hightune["temp"], ds_hightune["pressure"], ds_hightune["qt"],
     )
-    ds_hightune["rh"] = ds_hightune["rh"].assign_attrs(**hightune_variables["rh"])
+    ds_hightune["rh"].attrs.update(**hightune_variables["rh"])
     # Final checks: are all variables present?
     for var in hightune_variables:
         if var not in ds_hightune:
@@ -798,7 +781,7 @@ def hightune_from_era5(conversion_dict):
         "surfaceForcing": "ts",
         "surfaceForcingWind": "z0_lagtraj",
     }
-    add_dict_to_global_attrs(ds_hightune, hightune_dictionary)
+    ds_hightune.attrs.update(hightune_dictionary)
     ds_hightune.to_netcdf(conversion_dict["hightune_file"])
 
 

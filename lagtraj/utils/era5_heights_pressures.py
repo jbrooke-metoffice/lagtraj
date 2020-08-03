@@ -1165,6 +1165,7 @@ def add_globals_attrs_to_ds(ds_to_add_to):
         r"Contact": r"l.c.denby[at]leeds[dot]ac[dot again]uk s.boeing[at]leeds[dot]ac[dot again]uk",
         r"ERA5 reference": r"Hersbach, H., Bell, B., Berrisford, P., Hirahara, S., Horányi, A., Muñoz‐Sabater, J., ... & Simmons, A. (2020). The ERA5 global reanalysis. Quarterly Journal of the Royal Meteorological Society.",
         r"Created": datetime.datetime.now().isoformat(),
+        r"Note": "Contains modified Copernicus Climate Change Service Information",
         r"Created with": r"https://github.com/EUREC4A-UK/lagtraj",
     }
     for attribute in global_attrs:
@@ -1410,10 +1411,10 @@ def dummy_trajectory(mf_list, trajectory_dict):
     # between files
     for mf_list_element in mf_list:
         time_start_mf = np.max(
-            mf_list_element["time"].where(mf_list_element["time"] <= start_date)
+            mf_list_element["time"][mf_list_element["time"] <= start_date]
         )
         time_end_mf = np.min(
-            mf_list_element["time"].where(mf_list_element["time"] >= end_date)
+            mf_list_element["time"][mf_list_element["time"] >= end_date]
         )
         mf_lists_ds = xr.Dataset()
         mf_lists_ds["time"] = mf_list_element["time"].sel(
@@ -1456,7 +1457,7 @@ def dummy_trajectory(mf_list, trajectory_dict):
     vars_for_traj = ["u", "v", "sp", "z", "t", "q", "lsm"]
     if trajectory_dict["velocity_strategy"] == "stationary":
         stationary_trajectory(ds_traj, trajectory_dict)
-    if trajectory_dict["velocity_strategy"] == "prescribed_velocity":
+    elif trajectory_dict["velocity_strategy"] == "prescribed_velocity":
         prescribed_velocity_trajectory(ds_traj, trajectory_dict)
     elif time_exact_match:
         trajectory_at_origin(mf_list, vars_for_traj, ds_traj, trajectory_dict)
@@ -1601,10 +1602,10 @@ def dummy_forcings(mf_list, forcings_dict):
 
 def main():
     """Dummy implementations for trajectory tool"""
-    files_model_an = "output_domains/an_model*.nc"
-    files_single_an = "output_domains/an_single*.nc"
-    files_model_fc = "output_domains/fc_model*.nc"
-    files_single_fc = "output_domains/fc_single*.nc"
+    files_model_an = "lagtraj/data/domains/eurec4a_circle_eul_data/an_model*.nc"
+    files_single_an = "lagtraj/data/domains/eurec4a_circle_eul_data/an_single*.nc"
+    files_model_fc = "lagtraj/data/domains/eurec4a_circle_eul_data/fc_model*.nc"
+    files_single_fc = "lagtraj/data/domains/eurec4a_circle_eul_data/fc_single*.nc"
     ds_model_an = xr.open_mfdataset(
         files_model_an, combine="nested", concat_dim="time", chunks={"time": 1}
     )
@@ -1621,45 +1622,47 @@ def main():
     for this_ds in ds_list:
         era5_normalise_longitude(this_ds, ds_model_an)
     output_levels = np.cumsum(20 * (1.017 ** np.arange(-1, 250)) - 20 * 1.017 ** -1)
-    steering_hpa = 950
     dummy_trajectory_dict = {
         "lat_origin": 13.3,
         "lon_origin": -57.717,
-        "datetime_origin": "2020-02-03T12:30",
-        "backward_duration_hours": 3,
-        "forward_duration_hours": 1,
-        "nr_iterations_traj": 10,
+        "datetime_origin": "2020-01-17T00:00",
+        "backward_duration_hours": 0,
+        "forward_duration_hours": 33*24-1,
+        #"nr_iterations_traj": 10,
+        "velocity_strategy": "stationary",
         # "velocity_strategy": "lower_troposphere_humidity_weighted",
         # "velocity_strategy": "prescribed_velocity",
         # "u_traj" : -6.0,
         # "v_traj" : -0.25,
-        "velocity_strategy": "velocity_at_pressure",
-        "velocity_pressure": 100.0 * steering_hpa,
+        # "velocity_strategy": "velocity_at_pressure",
+        # "velocity_pressure": 100.0 * steering_hpa,
         # "pres_cutoff_start": 60000.0,
         # "pres_cutoff_end": 50000.0,
-        "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
+        "traj_file": "ds_traj_stationary.nc",
     }
     dummy_trajectory(ds_list, dummy_trajectory_dict)
-    dummy_forcings_dict = {
-        "gradients_strategy": "both",
-        "mask": "ocean",
-        "traj_file": "ds_traj_" + str(steering_hpa) + ".nc",
-        "averaging_width": 4.0,
-        "w_cutoff_start": 70000.0,
-        "w_cutoff_end": 40000.0,
-        "output_levels_native": output_levels,
-        "era5_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
-    }
-    dummy_forcings(ds_list, dummy_forcings_dict)
-    dummy_conversion_dict = {
-        "nudging_time": "3600.",
-        "input_file": "ds_native_era5_" + str(steering_hpa) + ".nc",
-        "output_levels_racmo": output_levels,
-        "racmo_file": "ds_racmo_" + str(steering_hpa) + ".nc",
-        "hightune_file": "ds_hightune_" + str(steering_hpa) + ".nc",
-    }
-    racmo_from_era5(dummy_conversion_dict)
-    hightune_from_era5(dummy_conversion_dict)
+    averaging_widths=[0.5,1.0,2.0,4.0]
+    for averaging_width in averaging_widths:
+        dummy_forcings_dict = {
+            "gradients_strategy": "both",
+            "mask": "ocean",
+            "traj_file": "ds_traj_stationary.nc",
+            "averaging_width": averaging_width,
+            "w_cutoff_start": 70000.0,
+            "w_cutoff_end": 40000.0,
+            "output_levels_native": output_levels,
+            "era5_file": "ds_native_era5_stationary_"+str(averaging_width)+".nc",
+        }
+        dummy_forcings(ds_list, dummy_forcings_dict)
+        dummy_conversion_dict = {
+            "nudging_time": "3600.",
+            "input_file": "ds_native_era5_stationary_"+str(averaging_width)+".nc",
+            "output_levels_racmo": output_levels,
+            "racmo_file": "ds_racmo_stationary_"+str(averaging_width)+".nc",
+            "hightune_file": "ds_hightune_stationary_"+str(averaging_width)+".nc",
+        }
+        racmo_from_era5(dummy_conversion_dict)
+        hightune_from_era5(dummy_conversion_dict)
 
 
 if __name__ == "__main__":
